@@ -1,5 +1,5 @@
 version: "0.1.0"
-status: "PHASE_0_IN_REVIEW"
+status: "PHASE_0_COMPLETE_LOCKED"
 verified_at: "2026-09-25"
 selection_definition: "US-domiciled operating companies materially exposed to AI and listed on Nasdaq as of the universe freeze date"
 research_window:

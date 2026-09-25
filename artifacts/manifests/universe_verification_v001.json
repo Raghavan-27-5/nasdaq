@@ -1,332 +1,397 @@
 {
   "artifact": "universe_verification_v001",
   "phase": "PHASE_0",
-  "status": "IN_REVIEW",
+  "status": "VERIFIED",
   "verified_at": "2026-09-25",
+  "verification_method": "Nasdaq official stock pages for listing; SEC EDGAR 10-K filings for state of incorporation and US domicile; company IR materials as secondary",
   "research_window": {
     "start": "2020-01-01",
     "end_inclusive": "2026-09-22"
   },
   "universe_version": "0.1.0",
   "listing_screen": {
-    "status": "VERIFIED_BY_OFFICIAL_NASDAQ_TICKER_PAGES",
-    "primary_source": "Nasdaq"
+    "status": "ALL_20_VERIFIED",
+    "primary_source": "https://www.nasdaq.com/market-activity/stocks/{ticker}"
   },
   "domicile_screen": {
-    "status": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-    "primary_source": "SEC/company filings"
+    "status": "ALL_20_VERIFIED_US_DOMICILED",
+    "primary_source": "SEC EDGAR 10-K filings (state of incorporation)",
+    "notes": [
+      "MSFT incorporated in Washington state (not Delaware); all others Delaware-incorporated",
+      "AVGO redomiciled from Singapore to Delaware in April 2018",
+      "MRVL redomiciled from Bermuda to Delaware in April 2021",
+      "DDOG redomiciled from Delaware to Nevada in April 2026; remains US-domiciled",
+      "All 20 constituents are US-domiciled operating companies"
+    ]
   },
   "selection_note": "This is a 20-name structural research universe. The project must not call it the definitive top 20 until the Stage-B quantitative ranking is executed.",
   "constituents": [
     {
       "ticker": "NVDA",
       "company": "NVIDIA Corporation",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/nvda",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware (incorporated in California April 1993; reincorporated in Delaware April 1998)",
       "ai_category": "AI_COMPUTE",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "Dominant designer and supplier of GPUs and accelerated computing platforms (A100, H100, B100, GB200) used for AI model training and inference. Data center revenue driven overwhelmingly by AI workloads. CUDA software ecosystem is the de facto standard for AI/ML development.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/nvda",
+        "https://www.sec.gov/edgar/browse/?CIK=1045810",
+        "https://www.sec.gov/Archives/edgar/data/1045810/000104581025000023/nvda-20250126.htm"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "AVGO",
       "company": "Broadcom Inc.",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/avgo",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware (redomiciled from Singapore to Delaware in April 2018)",
       "ai_category": "CUSTOM_SILICON_NETWORKING",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "Major supplier of custom AI accelerators (TPUs for Google, custom ASICs for hyperscalers) and high-speed networking silicon essential for AI data center interconnects. VMware acquisition adds AI-relevant infrastructure software.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/avgo",
+        "https://www.sec.gov/Archives/edgar/data/1730168/000119312518107559/d562806dex31.htm",
+        "https://investors.broadcom.com/node/52781/xbrl-viewer"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "AMD",
       "company": "Advanced Micro Devices, Inc.",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/amd",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware (incorporated May 1, 1969)",
       "ai_category": "AI_COMPUTE",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "Second-largest designer of data center GPUs for AI training and inference (Instinct MI300X/MI350 series). EPYC server CPUs power AI-optimized cloud instances. Acquired Xilinx (adaptive AI inference accelerators) and building ROCm open-source AI software stack.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/amd",
+        "https://ir.amd.com/financial-information/sec-filings/content/0000002488-26-000018/amd-20251227.htm"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "MU",
       "company": "Micron Technology, Inc.",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/mu",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware (incorporated April 1984; headquartered in Boise, Idaho)",
       "ai_category": "AI_MEMORY",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "Leading manufacturer of High Bandwidth Memory (HBM3E) essential for AI GPU accelerators. DRAM and NAND products serve AI server and storage markets. Revenue growth directly correlated with AI data center capacity expansion.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/mu",
+        "https://www.sec.gov/edgar/browse/?CIK=723125",
+        "https://s25.q4cdn.com/621799436/files/doc_financials/2025/q4/0000723125-25-000028.pdf"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "MSFT",
       "company": "Microsoft Corporation",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/msft",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Washington (incorporated under Washington Business Corporation Act; headquartered in Redmond, WA)",
       "ai_category": "HYPERSCALER_AI_PLATFORM",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "Largest investor in OpenAI; integrates GPT-4/successor models across Azure OpenAI Service, Microsoft 365 Copilot, GitHub Copilot, and Bing. Azure is a top-2 cloud platform for AI workload hosting. Develops proprietary AI chips (Maia) for internal AI inference.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/msft",
+        "https://microsoft.gcs-web.com/static-files/e2931fdb-9823-4130-b2a8-f6b8db0b15a9"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "GOOGL",
       "company": "Alphabet Inc. Class A",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Class A Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/googl",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware (incorporated July 23, 2015; successor to Google Inc.)",
       "ai_category": "HYPERSCALER_AI_PLATFORM",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "Alphabet derives substantial revenue from AI across Google Search (Gemini), Google Cloud (Vertex AI, TPU infrastructure), DeepMind research, and Waymo autonomous driving. AI is core to its advertising optimization engine and cloud services growth.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/googl",
+        "https://www.sec.gov/Archives/edgar/data/1652044/000165204426000018/goog-20251231.htm",
+        "https://www.sec.gov/edgar/browse/?CIK=0001652044"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "AMZN",
       "company": "Amazon.com, Inc.",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/amzn",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware (reincorporated from Washington in 1996)",
       "ai_category": "HYPERSCALER_AI_PLATFORM",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "AWS is a leading cloud AI platform offering SageMaker, Bedrock, and custom AI chips (Trainium, Inferentia). AI drives product recommendations, Alexa, logistics optimization, and advertising.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/amzn",
+        "https://www.sec.gov/edgar/browse/?CIK=0001018724",
+        "https://ir.aboutamazon.com/corporate-governance/documents-and-charters/certificate-of-incorporation/default.aspx"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "META",
       "company": "Meta Platforms, Inc. Class A",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Class A Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/meta",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware (incorporated July 29, 2004 as TheFacebook, Inc.)",
       "ai_category": "AI_PLATFORM_INFRASTRUCTURE",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "Meta deploys AI extensively for content ranking, ad targeting, and recommendation systems. Massive investments in AI infrastructure (custom GPU clusters), open-source LLMs (Llama series), and AI-driven content creation tools. AI capex is a dominant share of total capital expenditure.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/meta",
+        "https://www.sec.gov/Archives/edgar/data/1326801/000162828026003942/meta-20251231.htm",
+        "https://www.sec.gov/edgar/browse/?CIK=1326801"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "PLTR",
       "company": "Palantir Technologies Inc. Class A",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Class A Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/pltr",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware (transferred listing from NYSE to Nasdaq in November 2022)",
       "ai_category": "ENTERPRISE_AI",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "Palantir's core platforms (Gotham, Foundry, AIP) are AI/ML-centric data integration and decision-support systems. The Artificial Intelligence Platform (AIP) enables enterprise customers to operationalize LLMs on their own data. Revenue is directly tied to AI-driven analytics.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/pltr",
+        "https://investors.palantir.com/files/2025%20FY%20PLTR%2010-K.pdf",
+        "https://www.sec.gov/Archives/edgar/data/1321655/000132165525000022/0001321655-25-000022-index.htm"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "MRVL",
       "company": "Marvell Technology, Inc.",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/mrvl",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware (incorporated 2021 as successor to Bermuda-based Marvell Technology Group Ltd.; redomiciled to Delaware April 2021)",
       "ai_category": "AI_NETWORKING_CUSTOM_SILICON",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "Marvell designs custom AI accelerators (ASICs), data processing units (DPUs), electro-optics, and networking semiconductors critical to AI/ML data center infrastructure. Custom compute and interconnect products deployed by major hyperscalers for AI training and inference.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/mrvl",
+        "https://www.sec.gov/edgar/browse/index.html?cik=1835632",
+        "https://investor.marvell.com/sec-filings/all-sec-filings/content/0001835632-26-000011/mrvl-20260131.htm"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "LRCX",
       "company": "Lam Research Corporation",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/lrcx",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware (incorporated 1980; HQ: Fremont, CA)",
       "ai_category": "SEMICONDUCTOR_EQUIPMENT_AI_CAPEX",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "Leading supplier of wafer fabrication equipment (etch, deposition, clean) used to manufacture advanced AI/ML accelerator chips. Growing AI workload demand directly drives increased capital spending on Lam's equipment by foundries and IDMs producing AI chips at advanced nodes.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/lrcx",
+        "https://www.sec.gov/edgar/browse/?CIK=CIK0000707549"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "AMAT",
       "company": "Applied Materials, Inc.",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/amat",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware (originally incorporated 1967; HQ: Santa Clara, CA)",
       "ai_category": "SEMICONDUCTOR_EQUIPMENT_AI_CAPEX",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "World's largest semiconductor equipment company. AI chip manufacturing at leading-edge nodes (3nm, 2nm, GAA) requires increasingly complex process steps, directly expanding Applied Materials' addressable market and revenue.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/amat",
+        "https://www.sec.gov/Archives/edgar/data/6951/000000695124000044/amat-20241027.htm",
+        "https://www.sec.gov/edgar/browse/?CIK=6951&owner=exclude"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "CDNS",
       "company": "Cadence Design Systems, Inc.",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/cdns",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware (incorporated June 1988; HQ: San Jose, CA)",
       "ai_category": "EDA_AI_SEMICONDUCTOR_DESIGN",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "Provides EDA software, IP, and system design tools essential for designing AI accelerator chips. Cerebrus AI-driven chip design platform uses ML to optimize PPA. Every major AI chip is designed using Cadence tools.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/cdns",
+        "https://www.sec.gov/edgar/browse/?CIK=813672&owner=exclude"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "SNPS",
       "company": "Synopsys, Inc.",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/snps",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware (incorporated 1986 in NC, reincorporated 1987 in DE; HQ: Sunnyvale, CA)",
       "ai_category": "EDA_AI_SEMICONDUCTOR_DESIGN",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "Largest EDA company globally providing design, verification, IP, and silicon lifecycle management tools. DSO.ai platform applies AI/ML to automate chip design exploration. Critical-path infrastructure for designing AI processors.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/snps",
+        "https://www.sec.gov/Archives/edgar/data/883241/000088324124000024/snps-20241031.htm"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "PANW",
       "company": "Palo Alto Networks, Inc.",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/panw",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware (incorporated March 2005; HQ: Santa Clara, CA)",
       "ai_category": "AI_CYBERSECURITY",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "Leading cybersecurity platform integrating AI/ML across products. Cortex XSIAM uses AI for autonomous SOC operations, Prisma Cloud applies ML for cloud security, and next-gen firewalls employ ML-based threat detection.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/panw",
+        "https://www.sec.gov/Archives/edgar/data/1327567/000132756726000023/panw-20260731.htm",
+        "https://www.sec.gov/Archives/edgar/data/1327567/000132756726000005/panw-20260131.htm"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "CRWD",
       "company": "CrowdStrike Holdings, Inc. Class A",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Class A Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/crwd",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware",
       "ai_category": "AI_CYBERSECURITY",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "CrowdStrike's Falcon platform is built on a cloud-native AI engine (Charlotte AI) that uses machine learning and behavioral analytics to detect and prevent endpoint threats in real time, making AI central to its core product and revenue.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/crwd",
+        "https://www.sec.gov/edgar/browse/?CIK=0001535527",
+        "https://materials.proxyvote.com/Approved/22788C/20250425/FO10K_606790/INDEX.HTML?page=1"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "ADBE",
       "company": "Adobe Inc.",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/adbe",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware",
       "ai_category": "GENERATIVE_AI_SOFTWARE",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "Adobe embeds generative AI (Adobe Firefly, Adobe Sensei) across its Creative Cloud, Document Cloud, and Experience Cloud products, driving new revenue from AI-powered content generation, editing, and digital experience personalization.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/adbe",
+        "https://www.sec.gov/Archives/edgar/data/796343/0000796343-25-000004-index.htm",
+        "https://www.sec.gov/Archives/edgar/data/796343/000079634326000003/0000796343-26-000003-index.htm"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "DDOG",
       "company": "Datadog, Inc. Class A",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Class A Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/ddog",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware (redomiciled to Nevada via statutory conversion effective April 2026)",
       "ai_category": "AI_CLOUD_OBSERVABILITY",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "Datadog offers AI-native observability with ML-powered anomaly detection, log pattern clustering, and Bits AI assistant. Its platform monitors AI/ML model performance and LLM applications, positioning it as critical infrastructure for AI workloads.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/ddog",
+        "https://investors.datadoghq.com/static-files/5b3df1c8-8a56-4bee-8b2d-2e2f70239c36",
+        "https://www.sec.gov/Archives/edgar/data/1561550/000162828026043590/R1.htm"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "CRWV",
       "company": "CoreWeave, Inc. Class A",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Class A Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/crwv",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware",
       "ai_category": "AI_CLOUD_INFRASTRUCTURE",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "CoreWeave operates GPU-accelerated cloud infrastructure purpose-built for AI and ML workloads, providing NVIDIA GPU compute at scale to AI model training and inference customers. AI compute demand is its primary revenue driver.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/crwv",
+        "https://www.sec.gov/edgar/browse/?CIK=1769628",
+        "https://www.sec.gov/Archives/edgar/data/1769628/000119312525044231/d899798ds1.htm"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     },
     {
       "ticker": "QCOM",
       "company": "QUALCOMM Incorporated",
-      "security_class": "Common Stock / Class A where stated in issuer title",
+      "security_class": "Common Stock",
       "exchange": "NASDAQ",
       "listing_verified": true,
-      "listing_source_url": "https://www.nasdaq.com/market-activity/stocks/qcom",
-      "us_domicile_verified": "PENDING_OMP_PRIMARY_SOURCE_CHECK",
-      "domicile_source_requirement": "Verify against current SEC filing or official company filing; do not infer domicile from trading venue.",
+      "us_domicile_verified": true,
+      "domicile_detail": "Delaware",
       "ai_category": "EDGE_AI_COMPUTE",
-      "inclusion_rationale_source_requirement": "Verify current AI exposure from official company/SEC/IR materials during Phase 0/1.",
-      "history_start_status": "Verify exact first valid Yahoo Finance trading date during data-acquisition phase.",
-      "universe_version": "0.1.0",
-      "verified_at": "2026-09-25"
+      "inclusion_rationale": "Qualcomm designs Snapdragon SoCs with integrated AI accelerators (Hexagon NPU) enabling on-device AI inference for smartphones, PCs, automotive, and IoT. AI-capable chip shipments and AI licensing revenue represent a growing share of its business.",
+      "source_urls": [
+        "https://www.nasdaq.com/market-activity/stocks/qcom",
+        "https://www.sec.gov/edgar/browse/?CIK=804328",
+        "https://www.sec.gov/Archives/edgar/data/804328/000080432824000075/qcom-20240929.htm"
+      ],
+      "verified_at": "2026-09-25",
+      "universe_version": "0.1.0"
     }
   ],
   "exclusions": [
     {
       "ticker": "SNOW",
-      "reason": "NYSE-listed; fails strict Nasdaq constraint."
+      "reason": "NYSE-listed; fails strict Nasdaq listing constraint.",
+      "source": "https://www.nasdaq.com/market-activity/stocks/snow returns no result; SNOW trades on NYSE"
     },
     {
       "ticker": "ARM",
-      "reason": "UK-domiciled foreign issuer; excluded under the US-domicile experiment definition."
+      "reason": "UK-domiciled foreign issuer (Arm Holdings plc, incorporated in England and Wales); excluded under the US-domicile experiment definition.",
+      "source": "SEC EDGAR: CIK 0001973239, jurisdiction England and Wales"
     }
   ]
 }

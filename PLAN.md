@@ -12,7 +12,7 @@
 
 ### Phase 0A — Agent Operating System
 
-Status: `COMPLETE_AFTER_SELF_AUDIT`.
+Status: `COMPLETE`.
 
 Goal: provide the local coding agent with the project context, role, quality standards, worktree contract, data contract, research protocol, and execution instructions.
 
@@ -36,7 +36,7 @@ Outputs:
 
 ### Phase 0 — Project Specification + Universe Lock
 
-Status: `IN_PROGRESS`
+Status: `COMPLETE`
 
 Goal:
 

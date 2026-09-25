@@ -6,7 +6,7 @@
 
 **Specification version:** `0.1.0`
 
-**Specification status:** `PHASE_0_IN_PROGRESS`
+**Specification status:** `PHASE_0_COMPLETE`
 
 **Current date:** `2026-09-25`
 
