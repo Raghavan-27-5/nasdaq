@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Large data — must live on Google Drive, not in Git
+/data/
+*.parquet
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+
+# Model artifacts — must live on Google Drive
+/models/
+*.lgbm
+*.joblib
+
+# Secrets
+.env
+*.key
+*.pem
+credentials/
+
+# Project-specific: never commit raw market data or large generated files
+raw_data/
+cleaned_data/
+predictions/
+backtests/
+
+# SHA256SUMS is a bootstrap artifact, keep it tracked
+!SHA256SUMS.txt

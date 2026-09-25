@@ -1,0 +1,56 @@
+project:
+  name: nasdaq_ai_quant
+  specification_version: "0.1.0"
+  universe_version: "0.1.0"
+  timezone: "America/New_York"
+  market: "US"
+  research_start: "2020-01-01"
+  research_end_inclusive: "2026-09-22"
+  current_date: "2026-09-25"
+
+data:
+  provider: "yahoo_finance"
+  library: "yfinance"
+  interval: "1d"
+  storage_format: "parquet"
+  canonical_store: "google_drive"
+  adjusted_prices_for_returns: true
+
+benchmarks:
+  - QQQ
+  - SOXX
+  - SPY
+
+models:
+  primary_library: "lightgbm"
+  targets:
+    - return_1d
+    - return_5d
+    - return_21d
+    - vol_5d
+    - vol_21d
+    - direction_5d
+    - direction_21d
+
+compute:
+  local_role: "control_plane"
+  heavy_compute: "google_colab"
+  local_heavy_execution_allowed: false
+  local_large_download_allowed: false
+
+storage:
+  drive_root: "NasdaqAIQuant"
+  retain_intermediate_artifacts: true
+  overwrite_previous_artifacts: false
+
+validation:
+  temporal_split_required: true
+  random_train_test_split_allowed: false
+  leakage_tests_required: true
+  survivorship_bias_disclosure_required: true
+  transaction_cost_robustness_bps_round_trip: 10
+
+portfolio:
+  baseline_type: "long_only"
+  optimizer: "risk_adjusted_constrained"
+  exact_numeric_constraints_status: "OPEN"

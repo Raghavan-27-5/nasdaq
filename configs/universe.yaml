@@ -1,0 +1,174 @@
+version: "0.1.0"
+status: "PHASE_0_IN_REVIEW"
+verified_at: "2026-09-25"
+selection_definition: "US-domiciled operating companies materially exposed to AI and listed on Nasdaq as of the universe freeze date"
+research_window:
+  start: "2020-01-01"
+  end_inclusive: "2026-09-22"
+
+constituents:
+  - ticker: NVDA
+    company: "NVIDIA Corporation"
+    category: AI_COMPUTE
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "Core AI accelerator and accelerated-computing infrastructure exposure."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+  - ticker: AVGO
+    company: "Broadcom Inc."
+    category: CUSTOM_SILICON_NETWORKING
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "AI networking and custom silicon exposure supporting hyperscale AI infrastructure."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+  - ticker: AMD
+    company: "Advanced Micro Devices, Inc."
+    category: AI_COMPUTE
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "AI accelerators and data-center compute exposure."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+  - ticker: MU
+    company: "Micron Technology, Inc."
+    category: AI_MEMORY
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "HBM and advanced-memory exposure to AI accelerator systems."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+  - ticker: MSFT
+    company: "Microsoft Corporation"
+    category: HYPERSCALER_AI_PLATFORM
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "Azure AI infrastructure, AI software/services, and Copilot ecosystem."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+  - ticker: GOOGL
+    company: "Alphabet Inc. Class A"
+    category: HYPERSCALER_AI_PLATFORM
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "Gemini, Google Cloud AI, AI infrastructure, and AI-enabled search/product economics."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+  - ticker: AMZN
+    company: "Amazon.com, Inc."
+    category: HYPERSCALER_AI_PLATFORM
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "AWS AI infrastructure, model services, and custom AI silicon."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+  - ticker: META
+    company: "Meta Platforms, Inc. Class A"
+    category: AI_PLATFORM_INFRASTRUCTURE
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "Large-scale recommendation AI, generative AI, model development, and AI infrastructure spending."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+  - ticker: PLTR
+    company: "Palantir Technologies Inc. Class A"
+    category: ENTERPRISE_AI
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "Enterprise AI platform and AI application exposure."
+    history_rule: "No synthetic pre-listing history; use actual available observations only."
+
+  - ticker: MRVL
+    company: "Marvell Technology, Inc."
+    category: AI_NETWORKING_CUSTOM_SILICON
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "AI data-center networking and custom silicon exposure."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+  - ticker: LRCX
+    company: "Lam Research Corporation"
+    category: SEMICONDUCTOR_EQUIPMENT_AI_CAPEX
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "Semiconductor equipment supplier leveraged to advanced-node and memory/AI capex."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+  - ticker: AMAT
+    company: "Applied Materials, Inc."
+    category: SEMICONDUCTOR_EQUIPMENT_AI_CAPEX
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "Semiconductor manufacturing equipment exposure to advanced-node and AI-driven capex."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+  - ticker: CDNS
+    company: "Cadence Design Systems, Inc."
+    category: EDA_AI_SEMICONDUCTOR_DESIGN
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "Electronic design automation and AI-assisted semiconductor design infrastructure."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+  - ticker: SNPS
+    company: "Synopsys, Inc."
+    category: EDA_AI_SEMICONDUCTOR_DESIGN
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "EDA and AI-assisted semiconductor design infrastructure."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+  - ticker: PANW
+    company: "Palo Alto Networks, Inc."
+    category: AI_CYBERSECURITY
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "AI-enabled cybersecurity products and large enterprise security platform exposure."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+  - ticker: CRWD
+    company: "CrowdStrike Holdings, Inc. Class A"
+    category: AI_CYBERSECURITY
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "AI-driven endpoint, cloud, identity, and threat-detection platform."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+  - ticker: ADBE
+    company: "Adobe Inc."
+    category: GENERATIVE_AI_SOFTWARE
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "Generative AI through Firefly and AI-enabled creative/document workflows."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+  - ticker: DDOG
+    company: "Datadog, Inc. Class A"
+    category: AI_CLOUD_OBSERVABILITY
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "Cloud observability and AI-enabled monitoring/developer workflow exposure."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+  - ticker: CRWV
+    company: "CoreWeave, Inc. Class A"
+    category: AI_CLOUD_INFRASTRUCTURE
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "AI-focused cloud/GPU infrastructure directly leveraged to AI compute demand."
+    history_rule: "No synthetic pre-IPO history; use actual available observations only."
+
+  - ticker: QCOM
+    company: "QUALCOMM Incorporated"
+    category: EDGE_AI_COMPUTE
+    domicile: US
+    exchange: NASDAQ
+    inclusion_rationale: "On-device/edge AI compute, mobile AI, automotive, and data-center accelerator exposure."
+    history_rule: "Use all valid Yahoo Finance history inside the research window."
+
+exclusions_from_prior_candidate_set:
+  - ticker: SNOW
+    reason: "NYSE-listed; violates strict Nasdaq listing constraint."
+  - ticker: ARM
+    reason: "UK-domiciled foreign issuer; excluded under the frozen US-domicile definition."
