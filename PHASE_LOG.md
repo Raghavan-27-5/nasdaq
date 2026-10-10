@@ -5,6 +5,7 @@
 - Phase 0A: `COMPLETE`
 - Phase 0: `COMPLETE`
 - Phase 1: `READY`
+- Phase 11 (Dashboard): `IN REVIEW` — frontend complete; consuming synthetic fixtures pending Phase 3-10 artifacts
 
 ## Decision ledger
 
@@ -23,6 +24,9 @@
 | D0011 | 2026-09-25 | 0 | DDOG redomiciled from Delaware to Nevada April 2026; remains US-domiciled | SEC filing / investor relations | NOTED |
 | D0012 | 2026-09-25 | 0 | AVGO redomiciled from Singapore to Delaware April 2018; current entity is US-domiciled | SEC filing, Certificate of Incorporation | NOTED |
 | D0013 | 2026-09-25 | 0 | PLTR transferred listing from NYSE to Nasdaq November 2022; confirmed Nasdaq-listed | Nasdaq official page | NOTED |
+| D0014 | 2026-10-10 | 11 | Dashboard frontend built as a standalone React/Vite/TypeScript SPA rather than the suggested Streamlit + Plotly | `CONTEXT.md` §"Dashboard vision" permits a separate frontend when justified. Streamlit cannot produce the institutional-terminal visual quality this deliverable requires. Recorded as a documented deviation; `WORKTREE.md` directory contract preserved (`dashboard/pages/`, `dashboard/components/`, `dashboard/styles/`), only `app.py` → `App.tsx`. | LOCKED |
+| D0015 | 2026-10-10 | 11 | Dashboard currently renders SYNTHETIC demo fixtures, not research output | `dashboard/scripts/gen_demo_data.py`, seed 20260925, deterministic. Real content limited to `universe_verification_v001.json`. Every synthetic artifact carries `synthetic: true` + disclaimer; Research Audit carries a full real-vs-simulated ledger and a persistent DEMO badge. Gate 9 is therefore `IN REVIEW`, not `PASS`. | NOTED |
+| D0016 | 2026-10-10 | 11 | Synthetic market data is internally consistent by construction, not hand-authored | Correlations, betas, volatilities, drawdowns and the equal-weight benchmark are computed from the generated price series; only unobservable quantities (LightGBM IC, SHAP, fundamentals, optimiser output) are authored placeholders. Regime structure mirrors RESEARCH_PROTOCOL §18 (2020 crash, 2022 drawdown, 2023-24 AI-capex, 2025 unwind, 2026 continuation). | NOTED |
 
 ## Phase 0 tasks
 

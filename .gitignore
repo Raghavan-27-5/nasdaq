@@ -54,3 +54,10 @@ backtests/
 
 # SHA256SUMS is a bootstrap artifact, keep it tracked
 !SHA256SUMS.txt
+
+# Dashboard
+dashboard/node_modules/
+dashboard/dist/
+dashboard/src/data/
+dashboard/.vite/
+dashboard/*.tsbuildinfo

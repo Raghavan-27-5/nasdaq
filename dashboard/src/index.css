@@ -1,0 +1,178 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* --------------------------------------------------------------------------
+   Base
+   -------------------------------------------------------------------------- */
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-ink-950 text-fg font-sans antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior: none;
+  }
+
+  /* Every number in this app is tabular so columns never jitter. */
+  .tnum,
+  table,
+  input[type='number'] {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  ::selection {
+    background: rgba(74, 222, 158, 0.22);
+    color: #e9ecef;
+  }
+
+  /* Restrained scrollbars - terminal chrome, not OS chrome. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #242931 transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: #1c1f24;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: #2e343d;
+    background-clip: content-box;
+  }
+
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 1px #0e1013, 0 0 0 3px rgba(74, 222, 158, 0.2);
+    border-radius: 3px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Components
+   -------------------------------------------------------------------------- */
+
+@layer components {
+  /* Section label: the small uppercase tracked eyebrow above every panel. */
+  .eyebrow {
+    @apply text-3xs font-semibold uppercase tracking-[0.14em] text-fg-dim;
+  }
+
+  /* Panel chrome. Depth comes from a hairline, never from a heavy shadow. */
+  .panel {
+    @apply relative rounded border border-ink-700 bg-ink-850;
+  }
+
+  .panel-header {
+    @apply flex items-center justify-between gap-3 border-b border-ink-700 px-4 py-2.5;
+  }
+
+  /* Dense institutional data table. */
+  .tbl {
+    @apply w-full border-collapse text-micro;
+  }
+  .tbl thead th {
+    @apply sticky top-0 z-10 whitespace-nowrap border-b border-ink-700 bg-ink-800 px-3 py-2 text-left text-3xs font-semibold uppercase tracking-[0.1em] text-fg-dim;
+  }
+  .tbl tbody td {
+    @apply whitespace-nowrap border-b border-ink-700/60 px-3 py-[7px] align-middle;
+  }
+  .tbl tbody tr {
+    @apply transition-colors duration-150;
+  }
+  .tbl tbody tr:hover {
+    @apply bg-ink-750;
+  }
+  .tbl tbody tr[data-selected='true'] {
+    @apply bg-sig-pos/[0.07];
+  }
+  .tbl .num {
+    @apply text-right font-mono tnum text-fg;
+  }
+
+  /* Focus ring used on keyboard-interactive rows/cards. */
+  .rowfocus {
+    @apply cursor-pointer outline-none transition-colors duration-150;
+  }
+  .rowfocus:focus-visible {
+    @apply bg-ink-750;
+    box-shadow: inset 2px 0 0 0 #4ade9e;
+  }
+
+  /* Hairline vertical divider used between toolbar clusters. */
+  .vrule {
+    @apply h-4 w-px bg-ink-700;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Utilities
+   -------------------------------------------------------------------------- */
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  /* Subtle top-edge highlight that makes a panel feel lit rather than flat. */
+  .edge-lit {
+    position: relative;
+  }
+  .edge-lit::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07) 30%, rgba(255, 255, 255, 0.07) 70%, transparent);
+    pointer-events: none;
+  }
+
+  /* Faint engineering grid used behind the hero panels. */
+  .grid-bg {
+    background-image: linear-gradient(to right, rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Respect users who do not want motion. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
