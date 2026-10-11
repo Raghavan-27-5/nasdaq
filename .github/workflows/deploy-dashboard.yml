@@ -1,0 +1,72 @@
+# Phase 11 dashboard - GitHub Pages deployment
+#
+# The synthetic fixtures are NOT committed (dashboard/src/data/ is gitignored),
+# so the workflow regenerates them from the seed before building. The generator
+# is deterministic and uses only the Python standard library, so this is
+# reproducible rather than "whatever happened to be on the machine".
+
+name: Deploy dashboard to Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'dashboard/**'
+      - 'artifacts/manifests/**'
+      - '.github/workflows/deploy-dashboard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never cancel a deploy mid-publish; let it finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate synthetic fixtures
+        working-directory: dashboard
+        # Pure stdlib - no pip install required.
+        run: python3 scripts/gen_demo_data.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install
+        working-directory: dashboard
+        run: npm ci
+
+      - name: Build
+        working-directory: dashboard
+        env:
+          BASE_PATH: /nasdaq/
+        run: npm run build
+
+      - name: Disable Jekyll processing
+        run: touch dashboard/dist/.nojekyll
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dashboard/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
