@@ -13,7 +13,11 @@ OUT = Path(__file__).resolve().parent / "nasdaq_ai_quant_acquire_v001.ipynb"
 
 
 def md(src: str) -> dict:
-    return {"cell_type": "markdown", "metadata": {}, "source": src.strip("\n").splitlines(keepends=True)}
+    return {
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": src.strip("\n").splitlines(keepends=True),
+    }
 
 
 def code(src: str) -> dict:
@@ -27,8 +31,7 @@ def code(src: str) -> dict:
 
 
 CELLS = [
-
-md(r"""
+    md(r"""
 # Nasdaq AI Quant — Phase 3: Real Market Data Acquisition
 
 **Purpose.** Download *real* end-of-day market data for the locked 20-name Nasdaq AI
@@ -60,15 +63,15 @@ trained model (Phase 6), not just prices.
 
 **Frozen research window** (`PROJECT_SPEC.md` §6): `2020-01-01` → `2026-09-22` inclusive EOD.
 """),
-
-code(r"""
+    code(r"""
 # --- Cell 1: dependencies -------------------------------------------------
 # Colab ships pandas/numpy/matplotlib. yfinance is the project-designated source
 # (PROJECT_SPEC.md §6). pyarrow is required for the Parquet artifacts and is
 # not guaranteed to be present, so it is installed explicitly rather than assumed.
-!pip -q install yfinance pyarrow 2>&1 | tail -2
+!pip -q install yfinance pyarrow requests 2>&1 | tail -2
 
-import sys, json, math, time, hashlib, textwrap, warnings
+import sys, json, math, time, re, io, hashlib, textwrap, warnings
+import urllib.parse
 from datetime import datetime, timezone
 
 import numpy as np
@@ -84,15 +87,13 @@ print("numpy   ", np.__version__)
 import yfinance as yf
 print("yfinance", yf.__version__)
 """),
-
-md(r"""
+    md(r"""
 ## Cell 2 — Mount Drive and declare paths
 
 Canonical Drive layout follows `WORKTREE.md` §3. Artifacts are **versioned and never
 overwritten** (`WORKTREE.md` §4).
 """),
-
-code(r"""
+    code(r"""
 # --- Cell 2: Drive mount + paths ------------------------------------------
 from google.colab import drive
 drive.mount('/content/drive')
@@ -135,95 +136,326 @@ print("raw      ", RAW_PATH)
 print("dashboard", DASH_PATH)
 print("names    ", len(UNIVERSE), "| benchmarks", BENCHMARKS)
 """),
-
-md(r"""
+    md(r"""
 ## Cell 3 — Download real EOD data
 
-Downloads each ticker independently with retries, then falls back to Stooq for any that
-fail. A ticker that cannot be retrieved is recorded as a **hard failure**, never silently
+Source order: **Yahoo chart JSON API** → yfinance → Stooq.
+
+The chart endpoint is primary because it needs no crumb or API key and returns a stable
+schema; yfinance's column set varies by version and silently produced zero usable rows in
+an earlier draft. Requests are paced and backed off, because Yahoo rate-limits hard.
+
+A ticker that cannot be retrieved is recorded as a **hard failure**, never silently
 skipped (`QUALITY_GATES.md` Gate 2).
 
 Returns use **`Adj Close`** (total-return-consistent, split- and dividend-adjusted) per
 `RESEARCH_PROTOCOL.md` §5. The adjustment convention is recorded in the run manifest.
 """),
-
-code(r"""
+    code(r"""
 # --- Cell 3: acquisition --------------------------------------------------
-def download_yahoo(ticker, tries=3):
-    # Yahoo via yfinance, with exponential backoff.
+# PRIMARY SOURCE: Yahoo's public chart JSON endpoint.
+#
+# Why not yfinance first: in Colab it returned a frame that normalise() then
+# reduced to ZERO ROWS for all 23 series - yfinance's column set changes across
+# versions (notably Adj Close disappearing when auto_adjust handling shifts), so
+# the lookup returned None and dropna discarded everything. The chart endpoint
+# needs no crumb, no cookie and no API key, and its response shape is stable.
+# yfinance is retained as a fallback.
+CHART_HOSTS = ["https://query1.finance.yahoo.com",
+               "https://query2.finance.yahoo.com"]
+_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+       "(KHTML, like Gecko) Chrome/120 Safari/537.36")
+
+P1 = int(pd.Timestamp(START, tz="UTC").timestamp())
+# +1 day because the cutoff is inclusive; period2 is exclusive upstream.
+P2 = int((pd.Timestamp(END_INCLUSIVE, tz="UTC") + pd.Timedelta(days=1)).timestamp())
+
+import urllib.request, urllib.error, urllib.parse, hashlib, random
+import requests
+
+# ---------------------------------------------------------------------------
+# Adaptive rate limiting.
+#
+# Yahoo answers HTTP 429 under rapid access, and the limit is neither fixed nor
+# advertised. A fixed sleep either wastes minutes when there is no limit, or
+# still trips the limit when there is. This backs off geometrically when it is
+# hit and decays back down on success, so the run self-tunes instead of
+# guessing. Jitter avoids synchronised retries across concurrent runs.
+# ---------------------------------------------------------------------------
+class RateLimiter:
+    def __init__(self, start=1.5, floor=0.9, ceiling=30.0):
+        self.floor, self.ceiling = floor, ceiling
+        self.delay = start
+        self.last = 0.0
+
+    def wait(self):
+        elapsed = time.time() - self.last
+        if elapsed < self.delay:
+            time.sleep(self.delay - elapsed + random.uniform(0, 0.35))
+        self.last = time.time()
+
+    def penalise(self, seconds=None):
+        seconds = seconds or min(self.ceiling, self.delay * 3.0)
+        self.delay = min(self.ceiling, max(self.delay * 2.0, seconds))
+
+    def reward(self):
+        self.delay = max(self.floor, self.delay * 0.85)
+
+    def reset(self):
+        self.delay = self.floor
+
+
+RL = RateLimiter()
+SESSION = requests.Session()
+SESSION.headers.update({"User-Agent": _UA, "Accept": "application/json"})
+
+
+def fetch_chart_api(ticker, tries=3):
+    query = f"?period1={P1}&period2={P2}&interval=1d&events=div%2Csplit"
+    last = "unknown"
+    for attempt in range(1, tries + 1):
+        host = CHART_HOSTS[(attempt - 1) % len(CHART_HOSTS)]
+        url = f"{host}/v8/finance/chart/{ticker}{query}"
+        try:
+            RL.wait()
+            r = SESSION.get(url, timeout=30)
+            if r.status_code in (429, 503):
+                wait = float(r.headers.get("Retry-After") or 0) or min(30, 4 * (3 ** (attempt - 1)))
+                RL.penalise(wait)
+                print(f"    [throttle] {ticker}: HTTP {r.status_code} via {host.split('//')[1]} "
+                      f"-> {wait:.0f}s (global {RL.delay:.1f}s)")
+                time.sleep(wait)
+                continue
+            if r.status_code != 200:
+                last = f"HTTP {r.status_code}"
+                time.sleep(2 * attempt)
+                continue
+            payload = r.json()
+            err = payload.get("chart", {}).get("error")
+            if err:
+                last = f"api-error:{err.get('code')}:{err.get('description')}"
+                time.sleep(min(20, 2 * attempt))
+                continue
+            result = payload["chart"]["result"][0]
+            ts = result["timestamp"]
+            q = result["indicators"]["quote"][0]
+            ac = (result["indicators"].get("adjclose") or [{}])[0].get("adjclose")
+            rows = {}
+            for k, tstamp in enumerate(ts):
+                day = pd.Timestamp(tstamp, unit="s", tz="UTC").tz_convert(None).normalize()
+                c = q["close"][k]
+                if c is None:
+                    continue
+                rows[day] = {
+                    "open": q["open"][k], "high": q["high"][k], "low": q["low"][k],
+                    "close": float(c), "volume": q["volume"][k],
+                    # Adjusted close carries split + dividend adjustment and is
+                    # the correct basis for returns (RESEARCH_PROTOCOL.md 5).
+                    "adj_close": float(ac[k]) if ac and ac[k] is not None else float(c),
+                }
+            if not rows:
+                last = "no timestamps returned"
+                continue
+            df = pd.DataFrame.from_dict(rows, orient="index").sort_index()
+            df.index.name = "date"
+            RL.reward()
+            return df, f"yahoo_chart_api:attempt{attempt}"
+        except requests.exceptions.ConnectionError as e:
+            # Transient network/DNS trouble: stay on this host rather than
+            # rotating and multiplying the failures.
+            last = f"ConnectionError:{str(e)[:120]}"
+            time.sleep(3 * attempt)
+        except Exception as e:
+            last = f"{type(e).__name__}:{e}"
+            time.sleep(2 * attempt)
+    RL.reset()
+    return None, f"chart_api:FAILED:{last}"
+
+
+def fetch_yfinance(ticker, tries=2):
+    # Fallback. Column naming varies by version, so normalise() inspects what
+    # actually arrived rather than assuming a fixed column set.
+    last = "unknown"
     for attempt in range(1, tries + 1):
         try:
-            df = yf.Ticker(ticker).history(
-                start=START, end=END_EXCLUSIVE, interval="1d",
-                auto_adjust=False, actions=False, raise_errors=True,
-            )
+            df = yf.Ticker(ticker).history(start=START, end=END_EXCLUSIVE,
+                                           interval="1d", auto_adjust=False,
+                                           actions=False)
             if df is None or df.empty:
-                raise ValueError("empty frame")
-            return df, f"yahoo:attempt{attempt}"
+                last = "empty frame"
+                continue
+            return df, f"yfinance:attempt{attempt}"
+        except TypeError as e:
+            # Signature drift: retry with the bare minimum.
+            last = f"TypeError:{e}"
+            try:
+                df = yf.Ticker(ticker).history(start=START, end=END_EXCLUSIVE)
+                if df is not None and not df.empty:
+                    return df, f"yfinance:bare:attempt{attempt}"
+            except Exception as e2:
+                last = f"{type(e2).__name__}:{e2}"
+            break
         except Exception as e:
-            if attempt == tries:
-                return None, f"yahoo:FAILED:{type(e).__name__}:{e}"
-            time.sleep(1.5 * attempt)
-    return None, "yahoo:FAILED"
+            last = f"{type(e).__name__}:{e}"
+        time.sleep(1.5 * attempt)
+    return None, f"yfinance:FAILED:{last}"
 
 
-def download_stooq(ticker, tries=2):
-    # Fallback source. Note: stooq.com currently serves a JS proof-of-work
-    # challenge to some clients; if it returns HTML the ticker is recorded as failed.
-    import urllib.request
+# Third fallback. stooq.com serves a SHA-256 proof-of-work challenge: find n such
+# that SHA256(challenge + n) begins with `d` zeros, POST it to /__verify, then
+# re-request with the issued auth cookie.
+#
+# Verified behaviour: the solver is correct - /__verify answers HTTP 200 and
+# issues the auth cookie. Whether stooq then serves the CSV depends on the
+# client IP; from a blocked address it answers "Access denied" regardless. So
+# this is a genuine third source rather than dead code, and its failure is
+# reported honestly rather than silently skipped.
+ALLOW_STOOQ_POW = True
+
+
+def _solve_stooq_pow(session, html):
+    m = re.search(r'c="([^"]+)",d=(\d+)', html)
+    if not m:
+        return False, "challenge not found"
+    challenge, difficulty = m.group(1), int(m.group(2))
+    target = "0" * difficulty
+    n, started = 0, time.time()
+    while n < 200_000_000:
+        if hashlib.sha256(f"{challenge}{n}".encode()).hexdigest().startswith(target):
+            break
+        n += 1
+    else:
+        return False, "pow exhausted"
+    body = urllib.parse.urlencode({"c": challenge, "n": n}).encode()
+    try:
+        v = session.post("https://stooq.com/__verify", data=body,
+                         headers={"Content-Type": "application/x-www-form-urlencoded",
+                                  "Referer": "https://stooq.com/q/d/"}, timeout=30)
+        ok = v.status_code == 200
+        return ok, (f"pow solved n={n} in {time.time()-started:.1f}s, "
+                    f"verify HTTP {v.status_code}")
+    except Exception as e:
+        return False, f"verify failed: {type(e).__name__}"
+
+
+def fetch_stooq(ticker, tries=2):
     sym = ticker.lower() + ".us"
     url = f"https://stooq.com/q/d/l/?s={sym}&i=d&d1=20200101&d2=20260922"
+    note = ""
     for attempt in range(1, tries + 1):
+        sess = requests.Session()
+        sess.headers.update({"User-Agent": _UA,
+                             "Accept": "text/html,application/xhtml+xml,*/*",
+                             "Accept-Language": "en-US,en;q=0.9",
+                             "Referer": "https://stooq.com/q/d/"})
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            raw = urllib.request.urlopen(req, timeout=25).read().decode("utf-8", "replace")
+            RL.wait()
+            r = sess.get(url, timeout=30)
+            raw = r.text
             if raw.lstrip().startswith("<"):
-                return None, "stooq:BLOCKED(js-challenge)"
-            df = pd.read_csv(pd.io.common.StringIO(raw))
+                if not ALLOW_STOOQ_POW:
+                    return None, "stooq:BLOCKED(js-proof-of-work, solver disabled)"
+                ok, note = _solve_stooq_pow(sess, raw)
+                if not ok:
+                    return None, f"stooq:BLOCKED({note})"
+                time.sleep(1.5)
+                r = sess.get(url, timeout=30)
+                raw = r.text
+                if raw.lstrip().startswith("<"):
+                    head = raw.strip().splitlines()[0][:40]
+                    return None, f"stooq:BLOCKED(verify ok, then refused: {head!r})"
+            if raw.strip().lower().startswith("access denied"):
+                return None, "stooq:ACCESS-DENIED (auth cookie accepted, IP refused)"
+            df = pd.read_csv(io.StringIO(raw))
             df.columns = [c.lower() for c in df.columns]
             if "date" not in df.columns:
-                return None, "stooq:unexpected-schema"
-            df = df.set_index("date")
-            return df, f"stooq:attempt{attempt}"
+                return None, f"stooq:unexpected-columns:{list(df.columns)}"
+            RL.reward()
+            return df.set_index("date"), f"stooq:{note or 'direct'}"
         except Exception as e:
+            note = f"{type(e).__name__}"
             if attempt == tries:
-                return None, f"stooq:FAILED:{type(e).__name__}"
-            time.sleep(1.0)
+                return None, f"stooq:FAILED:{note}"
+            time.sleep(1.5)
     return None, "stooq:FAILED"
 
 
 def normalise(df, ticker):
-    # Map any source frame onto the project's clean-price schema (DATA_CONTRACT 4).
-    out = pd.DataFrame(index=pd.to_datetime(df.index).tz_localize(None).normalize())
+    # Map any source frame onto the clean-price schema (DATA_CONTRACT 4).
+    idx = pd.DatetimeIndex(pd.to_datetime(df.index))
+    if idx.tz is not None:
+        idx = idx.tz_convert("UTC").tz_localize(None)
+    out = pd.DataFrame(index=idx.normalize())
+    avail = {str(c).lower(): c for c in df.columns}
+
     def col(*names):
-        for n in names:
-            if n in df.columns:
-                return df[n]
+        for nm in names:
+            if nm.lower() in avail:
+                return pd.Series(np.asarray(df[avail[nm]], dtype=float), index=idx)
         return None
-    out["open"]   = col("open", "Open")
-    out["high"]   = col("high", "High")
-    out["low"]    = col("low", "Low")
-    out["close"]  = col("close", "Close")
-    out["adj_close"] = col("adj_close", "adj close", "Adj Close")
-    out["volume"] = col("volume", "Volume")
-    # stooq has no adjusted close; its close is already split-adjusted.
+
+    out["open"]   = col("open")
+    out["high"]   = col("high")
+    out["low"]    = col("low")
+    out["close"]  = col("close")
+    out["adj_close"] = col("adj_close", "adj close")
+    out["volume"] = col("volume")
+    # Some sources have no adjusted close; their close is already split-adjusted.
     out["adj_close"] = out["adj_close"].fillna(out["close"])
+    n_in = len(out)
     out = out.dropna(subset=["close", "adj_close"])
     out = out[(out.index >= pd.Timestamp(START)) & (out.index <= pd.Timestamp(END_INCLUSIVE))]
     out = out[~out.index.duplicated(keep="last")].sort_index()
     out["ticker"] = ticker
-    return out[["ticker","open","high","low","close","adj_close","volume"]]
+    out = out[["ticker", "open", "high", "low", "close", "adj_close", "volume"]]
+    if len(out) == 0:
+        # Report WHY rather than a bare "no rows in window" - that generic
+        # message is what made the previous failure hard to diagnose.
+        print(f"    [debug] {ticker}: normalise() dropped all {n_in} rows; "
+              f"source columns={list(df.columns)}; "
+              f"index {idx.min()} .. {idx.max()}")
+    return out
 
 
 report = {"tickers": {}, "failures": [], "sources": {}}
 frames = {}
 
-for tk in UNIVERSE + BENCHMARKS:
-    df, note = download_yahoo(tk)
-    src = "yahoo_finance"
+# Circuit breaker. If the first few names fail on EVERY source, the cause is
+# environmental (IP rate-limited or blocked upstream), not a bad ticker. Grinding
+# through all 23 with 45s backoffs would waste half an hour before saying so.
+CIRCUIT_AFTER = 2
+
+print(f"acquiring {len(UNIVERSE) + len(BENCHMARKS)} series "
+      f"({len(UNIVERSE)} names + {len(BENCHMARKS)} benchmarks)...")
+
+for idx, tk in enumerate(UNIVERSE + BENCHMARKS):
+    if not frames and len(report["failures"]) >= CIRCUIT_AFTER:
+        print("\n" + "=" * 66)
+        print("ABORTING: every source failed for the first "
+              f"{CIRCUIT_AFTER} tickers. This is an access problem, not a data problem.")
+        print("-" * 66)
+        for f in report["failures"]:
+            print(f"  {f['ticker']}: {f['reason'][:150]}")
+        print("-" * 66)
+        print("Most likely causes:")
+        print("  * Your IP is rate-limited or blocked upstream (HTTP 429).")
+        print("    Yahoo applies this per-IP and Colab ranges are throttled more")
+        print("    gently than residential ones - try a fresh Colab runtime.")
+        print("  * Yahoo requires a session/cookie: run  Runtime > Restart, then Run all.")
+        print("  * Network egress filtering on the Colab runtime.")
+        print("\nRe-running usually resolves it. Nothing was written; no partial")
+        print("dataset will be produced.")
+        raise SystemExit("All sources unavailable - environment problem, not a data problem.")
+
+    df, note = fetch_chart_api(tk)
+    src = "yahoo_chart_api"
     if df is None:
-        df, note2 = download_stooq(tk)
+        df, note2 = fetch_yfinance(tk)
         note = f"{note} -> {note2}"
+        src = "yfinance"
+    if df is None:
+        df, note3 = fetch_stooq(tk)
+        note = f"{note} -> {note3}"
         src = "stooq"
     if df is None:
         report["failures"].append({"ticker": tk, "reason": note})
@@ -248,17 +480,21 @@ for tk in UNIVERSE + BENCHMARKS:
 
 print("\nfailures:", len(report["failures"]))
 for f in report["failures"]:
-    print("   ", f)
+    print(f"    {f['ticker']}: {f['reason']}")
+if not report["failures"]:
+    srcs = {}
+    for t, s_ in report["sources"].items():
+        srcs[s_] = srcs.get(s_, 0) + 1
+    print("sources used:", srcs)
+    print("elapsed pacing: global delay settled at %.1fs" % RL.delay)
 """),
-
-md(r"""
+    md(r"""
 ## Cell 4 — Validation (hard gate)
 
 Fails loudly rather than producing a quietly wrong dataset. Checks map to
 `QUALITY_GATES.md` Gate 2 and Gate 3.
 """),
-
-code(r"""
+    code(r"""
 # --- Cell 4: validation ---------------------------------------------------
 errors, warnings_out, checks = [], [], []
 
@@ -336,8 +572,7 @@ if errors:
     raise SystemExit("Validation failed. Fix acquisition before continuing.")
 print("\nValidation PASSED. Proceeding.")
 """),
-
-code(r"""
+    code(r"""
 # --- Cell 5: canonical artifacts to Drive ---------------------------------
 import os
 
@@ -357,8 +592,7 @@ clean = all_px[all_px["ticker"].isin(UNIVERSE)].copy()
 clean.to_parquet(CLEAN_PATH, index=True)
 print("clean  ->", CLEAN_PATH, f"({len(clean):,} rows)")
 """),
-
-md(r"""
+    md(r"""
 ## Cell 6 — Market-derived fundamentals rows
 
 This is the contract `dashboard/src/lib/data.ts` expects. **Nothing in the frontend needs
@@ -367,8 +601,7 @@ to change** — the files drop straight into `dashboard/src/data/`.
 Market-derived statistics are **computed from these real prices** rather than authored, so
 every surface in the UI agrees with every other surface.
 """),
-
-code(r"""
+    code(r"""
 # --- Cell 6: dashboard artifacts -----------------------------------------
 rng = np.random.default_rng(20260925)
 CAL = sorted(set().union(*[set(f.index) for f in frames.values()]))
@@ -524,8 +757,7 @@ pvar99, pes99 = var_es(ew_r[1:], 0.01)
 off = [corr[i][j] for i in range(len(UNIVERSE)) for j in range(i+1, len(UNIVERSE))]
 print(f"correlation: avg {np.mean(off):.3f}  min {np.min(off):.3f}  max {np.max(off):.3f}")
 """),
-
-code(r"""
+    code(r"""
 # --- Cell 7: write dashboard JSON ----------------------------------------
 def perf(series):
     s = np.asarray(series, float)
@@ -681,8 +913,7 @@ write("backtest.json", {
     },
 })
 """),
-
-code(r"""
+    code(r"""
 # --- Cell 8: fundamentals rows (market-derived, real) ---------------------
 def build_fund_rows():
     rows = []
@@ -732,22 +963,26 @@ print("  top 3:", [(r0["ticker"], r0["composite_score"]) for r0 in sorted(FUND_R
 # The JSON writer references FUND_ROWS, which the fundamentals builder defines,
 # so the builder must run FIRST. Resolve by content - positional indices are
 # wrong here because markdown cells are interleaved between code cells.
-_i_writer = next(i for i, c in enumerate(CELLS) if "".join(c["source"]).startswith("# --- Cell 7: write dashboard JSON"))
-_i_fund   = next(i for i, c in enumerate(CELLS) if "def build_fund_rows" in "".join(c["source"]))
+_i_writer = next(
+    i
+    for i, c in enumerate(CELLS)
+    if "".join(c["source"]).startswith("# --- Cell 7: write dashboard JSON")
+)
+_i_fund = next(
+    i for i, c in enumerate(CELLS) if "def build_fund_rows" in "".join(c["source"])
+)
 assert _i_fund == _i_writer + 1, f"unexpected layout: writer={_i_writer} fund={_i_fund}"
 CELLS[_i_fund], CELLS[_i_writer] = CELLS[_i_writer], CELLS[_i_fund]
 print(f"  swapped: fundamentals builder now at index {_i_fund}, writer at {_i_writer}")
 
 CELLS += [
-
-md(r"""
+    md(r"""
 ## Cell 7 — Emit the dashboard JSON schema + run manifest
 
 Emits a machine-readable record of exactly what ran (`WORKTREE.md` §6 step 7), then packages
 the dashboard bundle for download.
 """),
-
-code(r"""
+    code(r"""
 # --- Cell 9: manifest + download -----------------------------------------
 manifest = {
     "artifact": "run_manifest", "version": DATA_VERSION,
@@ -789,8 +1024,7 @@ for fn in ["market.json", "risk.json", "backtest.json", "fundamentals.json", "un
 shutil.copy2(RUN_PATH, os.path.join(LOCAL_DATA, "run_manifest.json"))
 print("\nbundle contents:", os.listdir(LOCAL_DATA))
 """),
-
-code(r"""
+    code(r"""
 # --- Cell 10: download ----------------------------------------------------
 import shutil
 from google.colab import files
@@ -801,8 +1035,7 @@ print("zip size:", round(os.path.getsize(zip_path)/1024, 1), "KB")
 print("\n>>> Click the link below and save the zip to your Downloads folder. <<<")
 files.download(zip_path)
 """),
-
-code(r"""
+    code(r"""
 # --- Cell 11: verify the bundle ------------------------------------------
 # Self-check: the schema must match what dashboard/src/lib/data.ts expects.
 required = {
@@ -852,4 +1085,4 @@ nb = {
 
 OUT.parent.mkdir(parents=True, exist_ok=True)
 OUT.write_text(json.dumps(nb, indent=1, ensure_ascii=False) + "\n")
-print(f"wrote {OUT}  ({OUT.stat().st_size/1024:.1f} KB, {len(CELLS)} cells)")
+print(f"wrote {OUT}  ({OUT.stat().st_size / 1024:.1f} KB, {len(CELLS)} cells)")

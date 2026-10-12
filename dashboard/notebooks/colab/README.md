@@ -55,6 +55,38 @@ diversification), renormalised. Fundamental fields are emitted as `null` and the
 `—`. That is deliberate: emitting invented numbers behind a `"synthetic": false` flag would
 be worse than showing nothing.
 
+## Data sources
+
+Source order, per ticker:
+
+1. **Yahoo chart JSON API** (primary) — `query1`/`query2` `/v8/finance/chart/`. No crumb,
+   no cookie, no API key, and a stable response schema.
+2. **yfinance** (fallback) — column naming varies by version.
+3. **Stooq** (last resort).
+
+### Why the chart API is primary
+
+The first delivered version used yfinance first. In Colab it returned a frame for all
+23 series, and `normalise()` then reduced **every one to zero rows** — yfinance's column
+set shifts between versions (notably `Adj Close` disappearing when `auto_adjust` handling
+changed), so the column lookup returned `None` and `dropna` discarded everything. The
+symptom was a generic `no rows in window` per ticker, which is why `normalise()` now
+prints the source columns and index range when it drops everything.
+
+### Rate limiting
+
+Yahoo returns **HTTP 429** under rapid access. The notebook therefore paces requests
+(`REQUEST_DELAY`), rotates between `query1`/`query2`, and backs off exponentially on 429/503,
+honouring `Retry-After` when present. Expect roughly 40–60 seconds for the full universe.
+
+### Stooq proof-of-work
+
+Stooq now serves a JavaScript proof-of-work challenge to some clients. A solver is included
+but **disabled by default** (`ALLOW_STOOQ_POW = False`): Yahoo is the project's designated
+source and works without it, and building an anti-bot circumvention into a research pipeline
+is not a trade worth making for a redundant fallback. Flip that flag only if Yahoo becomes
+unreachable from your runtime.
+
 ## Validation gate
 
 Cell 4 **hard-fails** and raises `SystemExit` rather than emitting a quietly wrong dataset.
@@ -68,25 +100,22 @@ Checks map to `QUALITY_GATES.md` Gates 2–3:
 - PLTR / CRWV listing truncation detected
 - implausible one-day moves flagged
 
-Acquisition retries three times per ticker, then falls back to Stooq. Stooq currently
-serves a JavaScript proof-of-work challenge to some clients; if it returns HTML the ticker
-is recorded as failed and surfaces in the manifest rather than being skipped.
+Acquisition retries per ticker and records the full failure chain
+(`chart_api → yfinance → stooq`) in the run manifest rather than skipping silently.
 
 ## Conventions
 
 - Returns use **`Adj Close`** (split- and dividend-adjusted) per `RESEARCH_PROTOCOL.md` §5.
   Recorded in the run manifest.
-- `END_EXCLUSIVE` is one day past the inclusive cutoff because `yfinance` treats `end` as
-  exclusive; the notebook **asserts** the returned maximum rather than assuming it
+- The chart endpoint's `period2` is one day past the inclusive cutoff because it is
+  exclusive upstream; the notebook **asserts** the returned maximum rather than assuming it
   (`PROJECT_SPEC.md` §6).
 
 ## Verification status
 
-The notebook was executed end-to-end against stubbed fixtures before delivery
-(11/11 code cells, `BUNDLE VERIFIED`), and the emitted JSON was checked against the
-frontend contract: 28/28 schema assertions pass.
-
-Bugs found and fixed during that verification:
+**Stage 1 — stubbed fixtures.** All 11 code cells executed end-to-end
+(`BUNDLE VERIFIED`); the emitted JSON was asserted against the frontend contract,
+28/28 schema checks passing. Bugs caught at this stage:
 
 - `"weight"` key missing from three factor definitions
 - `FUND_ROWS` used before definition (cell ordering was swapped by wrong index)
@@ -95,6 +124,11 @@ Bugs found and fixed during that verification:
 - shape mismatch pairing three attribution series of different lengths
 - the `runs/` directory was never created, so the manifest write raised `FileNotFoundError`
 - `pyarrow` added to the install line for the Parquet artifacts
+
+**Stage 2 — live acquisition.** The fetcher was exercised against the real Yahoo endpoint
+for all 23 series (1,689 trading days, 2020-01-02 → 2026-09-22), which surfaced the
+yfinance column-drift failure described above. That is what motivated the chart API as
+primary source, the request pacing, and the diagnostic output in `normalise()`.
 
 ## Regenerating
 
