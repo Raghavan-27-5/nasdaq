@@ -134,9 +134,8 @@ export function MLLab() {
       title="ML Lab"
       lede={
         <>
-          Separate LightGBM estimators per target, evaluated with an expanding walk-forward scheme.
-          Training rows whose labels overlap the test interval are purged and embargoed, so no
-          observation contributes to both sides of a split.
+          Separate LightGBM per target, expanding walk-forward, labels purged and embargoed —
+          no observation contributes to both sides of a split.
         </>
       }
       toolbar={

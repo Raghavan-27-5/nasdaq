@@ -210,9 +210,8 @@ export function RiskTerminal() {
       title="Risk Terminal"
       lede={
         <>
-          Covariance is estimated from a trailing window and shrunk with Ledoit-Wolf — at n = 20 the
-          raw sample matrix is close to singular, so shrinkage is a correctness requirement rather
-          than a refinement.
+          Trailing-window covariance, Ledoit-Wolf shrunk — at n = 20 the raw sample matrix is near
+          singular, so shrinkage is correctness, not refinement.
         </>
       }
       toolbar={

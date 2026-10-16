@@ -100,9 +100,9 @@ export function PortfolioOptimizer() {
       title="Portfolio Optimizer"
       lede={
         <>
-          Predicted 21-day returns enter the objective alongside a shrinkage covariance estimate,
-          explicit concentration limits, a turnover cap and an explicit transaction-cost penalty.
-          All three reference solutions are retained so the cost of the constraints is measurable.
+          Predicted 21-day returns with shrinkage covariance, concentration limits, a turnover cap
+          and a cost penalty. All three reference solutions are kept, so constraint cost is
+          measurable.
         </>
       }
       toolbar={

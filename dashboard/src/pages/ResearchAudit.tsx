@@ -56,6 +56,7 @@ const DECISIONS = [
   ['D0023', '2026-10-16', '3', 'Offline dry-run harness is the pre-flight gate for any live Colab acquisition run', 'dry_run_notebook.py — executes all cells, audits bundle contract', 'LOCKED'],
   ['D0024', '2026-10-16', '3', 'First real acquisition executed (live mode): fixed normalise() tz-alignment frame loss + yfinance corporate-action capture; 23/23 series, 320 actions, 0 failures', 'validation PASS 26 checks; audit 103/103; bundle installed to dashboard (partial-real)', 'LOCKED'],
   ['D0025', '2026-10-16', '11', 'Acquisition bundle committed to the public repo — GitHub Pages renders real data; CI regenerates only fixture surfaces via the synthetic:false guard', 'dashboard/src/data no longer gitignored; owner-approved (public EOD prices)', 'LOCKED'],
+  ['D0026', '2026-10-16', '3', 'End-to-end QA audit: six confirmed defects fixed (factor z-rank inversion, 12-1 momentum, Sharpe definition, worst_30d rolling-mean, truncated-name CAGR, chart copy); shipped via --from-parquet reprocess of the frozen acquisition; run_context recorded in manifests', 'docs/QA_REVIEW_2026-10-16.md; dry 123/123; reprocess 119/119', 'LOCKED'],
 ] as const
 
 const OPEN_ISSUES = [
@@ -146,10 +147,8 @@ export function ResearchAudit() {
       title="Research Audit"
       lede={
         <>
-          This page exists so that any claim made anywhere else in the terminal can be traced to a
-          named source, a version, and an explicit statement of whether it is real or simulated.
-          Every surface carries an artifact-level status; nothing is claimed real unless it traces
-          to a versioned run.
+          Every claim elsewhere in the terminal traces to a named source, a version and an explicit
+          real-or-simulated status. Nothing is claimed real unless it traces to a versioned run.
         </>
       }
       toolbar={

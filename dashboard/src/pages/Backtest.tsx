@@ -150,10 +150,9 @@ export function Backtest() {
       title="Backtest"
       lede={
         <>
-          Out-of-sample results only — training-period predictions are never plotted here. Net
-          figures carry a {backtest.cost_bps_round_trip} bps round-trip cost assumption. Factor
-          attribution reports the residual alpha with its standard error rather than a headline
-          return alone.
+          Out-of-sample only — training-period predictions are never plotted. Net figures carry a{' '}
+          {backtest.cost_bps_round_trip} bps round-trip cost; attribution reports residual alpha
+          with its standard error.
         </>
       }
       toolbar={
@@ -211,7 +210,7 @@ export function Backtest() {
         {/* Curve + comparison */}
         <div className="grid gap-3 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <Panel
-            title={mode === 'relative' ? `Relative performance vs ${base}` : mode === 'drawdown' ? 'Underwater plot' : 'Growth of 100 · out-of-sample'}
+            title={mode === 'relative' ? `Relative performance vs ${base}` : mode === 'drawdown' ? 'Underwater plot' : 'Rebased to 1.00 · out-of-sample'}
             subtitle={`${backtest.oos_start} → ${backtest.oos_end} · ${backtest.rebalance} · ${backtest.cost_bps_round_trip}bps RT`}
             actions={
               mlSim ? (
@@ -492,9 +491,9 @@ export function Backtest() {
             </table>
             <div className="space-y-1.5 border-t border-ink-700 px-4 py-3">
               <p className="text-2xs leading-relaxed text-fg-dim">
-                Drag is derived from realised turnover of{' '}
-                {pct(portfolio.annual_turnover, 0)} per year. At the required 10 bps assumption the
-                signal degrades but does not invert; beyond ~25 bps it does not survive.
+                Drag from realised turnover of{' '}
+                {pct(portfolio.annual_turnover, 0)} per year. At 10 bps the signal degrades but
+                does not invert; beyond ~25 bps it does not survive.
               </p>
               <p className="text-2xs leading-relaxed text-fg-mute">
                 Capacity is <span className="text-fg-dim">NOT COMPUTED</span> — a bps haircut alone

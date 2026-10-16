@@ -227,12 +227,12 @@ export function AIUniverse() {
       title="AI Universe"
       lede={
         <>
-          Stage-A structural screen (Nasdaq listing, US domicile, material AI exposure, disclosure
-          and liquidity) followed by Stage-B quantitative ranking across{' '}
+          Stage-A structural screen (Nasdaq, US domicile, AI exposure, disclosure, liquidity);
+          Stage-B ranking across{' '}
           {fundamentalFactorsPending
             ? `the ${fundamentals.factor_defs.length} market-derived factors available in this build (fundamental factors pending Phase 1)`
             : 'ten documented factors'}
-          . No subjective adjustment is applied to the composite.
+          . No subjective adjustment.
         </>
       }
       toolbar={

@@ -122,9 +122,8 @@ export function CommandCenter() {
       title="Command Center"
       lede={
         <>
-          Single view of the research state: universe integrity, model signal quality, portfolio
-          construction and realised risk. Every figure on this page is read from a versioned
-          artifact — the dashboard performs no computation of its own.
+          Universe integrity, signal quality, portfolio construction and realised risk in one view.
+          Values are read from versioned artifacts; charts are rebased views of the stored series.
         </>
       }
       toolbar={
