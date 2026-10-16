@@ -1,0 +1,523 @@
+{
+  "artifact": "run_manifest",
+  "version": "v001",
+  "spec_version": "0.1.0",
+  "universe_version": "0.1.0",
+  "notebook": "nasdaq_ai_quant_acquire_v002.ipynb",
+  "executed_at": "2026-10-16T12:20:14.570469+00:00",
+  "window": {
+    "start": "2020-01-01",
+    "end_inclusive": "2026-09-22"
+  },
+  "price_convention": "adjusted close (split and dividend adjusted)",
+  "trading_days": 1689,
+  "sources": {
+    "primary": "yahoo_chart_api",
+    "fallbacks": [
+      "yfinance",
+      "stooq (PoW disabled)"
+    ],
+    "per_ticker": {
+      "NVDA": "yfinance",
+      "AVGO": "yfinance",
+      "AMD": "yfinance",
+      "MU": "yfinance",
+      "MSFT": "yfinance",
+      "GOOGL": "yfinance",
+      "AMZN": "yfinance",
+      "META": "yfinance",
+      "PLTR": "yfinance",
+      "MRVL": "yfinance",
+      "LRCX": "yfinance",
+      "AMAT": "yfinance",
+      "CDNS": "yfinance",
+      "SNPS": "yfinance",
+      "PANW": "yfinance",
+      "CRWD": "yfinance",
+      "ADBE": "yfinance",
+      "DDOG": "yfinance",
+      "CRWV": "yfinance",
+      "QCOM": "yfinance",
+      "QQQ": "yfinance",
+      "SOXX": "yfinance",
+      "SPY": "yfinance"
+    }
+  },
+  "tickers": {
+    "NVDA": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 29
+    },
+    "AVGO": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 28
+    },
+    "AMD": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 0
+    },
+    "MU": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 20
+    },
+    "MSFT": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 27
+    },
+    "GOOGL": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 11
+    },
+    "AMZN": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 1
+    },
+    "META": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 11
+    },
+    "PLTR": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1501,
+      "first": "2020-09-30",
+      "last": "2026-09-22",
+      "corporate_actions": 0
+    },
+    "MRVL": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 26
+    },
+    "LRCX": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 27
+    },
+    "AMAT": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 27
+    },
+    "CDNS": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 0
+    },
+    "SNPS": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 0
+    },
+    "PANW": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 2
+    },
+    "CRWD": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 1
+    },
+    "ADBE": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 0
+    },
+    "DDOG": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 0
+    },
+    "CRWV": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 373,
+      "first": "2025-03-28",
+      "last": "2026-09-22",
+      "corporate_actions": 0
+    },
+    "QCOM": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 27
+    },
+    "QQQ": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 27
+    },
+    "SOXX": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 29
+    },
+    "SPY": {
+      "status": "OK",
+      "source": "yfinance",
+      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "rows": 1689,
+      "first": "2020-01-02",
+      "last": "2026-09-22",
+      "corporate_actions": 27
+    }
+  },
+  "failures": [],
+  "validation": {
+    "checks": [
+      {
+        "check": "all_tickers_downloaded",
+        "status": "PASS",
+        "detail": "missing=[]"
+      },
+      {
+        "check": "max_date_within_cutoff",
+        "status": "PASS",
+        "detail": "max returned 2026-09-22, cutoff 2026-09-22"
+      },
+      {
+        "check": "benchmarks_span_window",
+        "status": "PASS",
+        "detail": "benchmarks 2020-01-02 -> 2026-09-22"
+      },
+      {
+        "check": "PLTR_listing_truncation",
+        "status": "PASS",
+        "detail": "first observation 2020-09-30"
+      },
+      {
+        "check": "CRWV_listing_truncation",
+        "status": "PASS",
+        "detail": "first observation 2025-03-28"
+      },
+      {
+        "check": "NVDA_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "AVGO_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "AMD_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "MU_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "MSFT_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "GOOGL_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "AMZN_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "META_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "MRVL_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "LRCX_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "AMAT_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "CDNS_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "SNPS_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "PANW_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "CRWD_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "ADBE_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "DDOG_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "QCOM_full_window_history",
+        "status": "PASS",
+        "detail": "first observation 2020-01-02"
+      },
+      {
+        "check": "PLTR_min_observations",
+        "status": "PASS",
+        "detail": "1501 rows (need >= 1400)"
+      },
+      {
+        "check": "CRWV_min_observations",
+        "status": "PASS",
+        "detail": "373 rows (need >= 300)"
+      },
+      {
+        "check": "trading_day_count",
+        "status": "PASS",
+        "detail": "1689 union days"
+      }
+    ],
+    "errors": [],
+    "warnings": [],
+    "status": "PASS"
+  },
+  "corporate_actions": {
+    "events": 320,
+    "per_ticker": {
+      "NVDA": 29,
+      "AVGO": 28,
+      "AMD": 0,
+      "MU": 20,
+      "MSFT": 27,
+      "GOOGL": 11,
+      "AMZN": 1,
+      "META": 11,
+      "PLTR": 0,
+      "MRVL": 26,
+      "LRCX": 27,
+      "AMAT": 27,
+      "CDNS": 0,
+      "SNPS": 0,
+      "PANW": 2,
+      "CRWD": 1,
+      "ADBE": 0,
+      "DDOG": 0,
+      "CRWV": 0,
+      "QCOM": 27,
+      "QQQ": 27,
+      "SOXX": 29,
+      "SPY": 27
+    }
+  },
+  "ledger": [
+    {
+      "surface": "AI Universe - constituent identity, AI category, domicile, source URLs",
+      "status": "REAL",
+      "source": "artifacts/manifests/universe_verification_v001.json"
+    },
+    {
+      "surface": "AI Universe - fundamental factors (valuation, growth, FCF, revisions, AI exposure)",
+      "status": "PENDING (Phase 1)",
+      "source": "sourced fundamental dataset not yet produced"
+    },
+    {
+      "surface": "AI Universe - market-derived factors (momentum, volatility, drawdown, correlation)",
+      "status": "REAL",
+      "source": "fundamentals.json - computed from acquired prices"
+    },
+    {
+      "surface": "Stock Intelligence - price history (20 names + QQQ/SOXX/SPY)",
+      "status": "REAL",
+      "source": "Yahoo Finance EOD via yahoo_chart_api (see run_manifest.json)"
+    },
+    {
+      "surface": "Stock Intelligence - correlation, beta, volatility, drawdown",
+      "status": "REAL",
+      "source": "computed from acquired prices"
+    },
+    {
+      "surface": "ML Lab - IC, ICIR, hit rate, folds, feature importance",
+      "status": "SYNTHETIC (fixture)",
+      "source": "dashboard/scripts/gen_demo_data.py - Phase 6/7 pending"
+    },
+    {
+      "surface": "Portfolio - weights, constraints, turnover",
+      "status": "SYNTHETIC (fixture)",
+      "source": "dashboard/scripts/gen_demo_data.py - Phase 9 pending"
+    },
+    {
+      "surface": "Risk - correlation matrix, beta map, volatility",
+      "status": "REAL",
+      "source": "risk.json - statistics on the equal-weight reference book"
+    },
+    {
+      "surface": "Risk - VaR/ES, MCTR/CCTR, covariance diagnostics (equal-weight reference book)",
+      "status": "REAL",
+      "source": "risk.json - Ledoit-Wolf fit on acquired prices"
+    },
+    {
+      "surface": "Backtest - equal-weight universe & benchmark curves, attribution",
+      "status": "REAL",
+      "source": "backtest.json (EW_UNIVERSE, QQQ, SOXX, SPY)"
+    },
+    {
+      "surface": "Backtest - ML portfolio curve, net-of-cost statistics",
+      "status": "SYNTHETIC (placeholder curve)",
+      "source": "backtest.json ML_PORTFOLIO - Phase 6/9/10 pending"
+    },
+    {
+      "surface": "Research Audit - ledger, open issues, decision record",
+      "status": "REAL",
+      "source": "PHASE_LOG.md / QUALITY_GATES.md / AGENTS.md"
+    }
+  ],
+  "pending_real_artifacts": [
+    "universe_verification_v001.json (DELIVERED)",
+    "fundamentals_v001.parquet (Phase 1)",
+    "prices_v001.parquet",
+    "features_v003.parquet (Phase 5)",
+    "predictions_v007.parquet (Phase 6)",
+    "covariance_v002.parquet (Phase 8)",
+    "portfolio_weights_v004.parquet (Phase 9)",
+    "backtest_v005.parquet (Phase 10)"
+  ],
+  "real_surfaces": [
+    "market.json",
+    "risk.json",
+    "manifest.json",
+    "backtest.json (EW_UNIVERSE + benchmarks)",
+    "fundamentals.json (market-derived factors only)"
+  ],
+  "synthetic_surfaces": [
+    "ML_PORTFOLIO equity curve",
+    "models.json (not produced here)",
+    "portfolio.json weights (not produced here)",
+    "fundamental factors in fundamentals.json (Phase 1 pending)"
+  ],
+  "clean_panel": {
+    "rows": 33780,
+    "tradable": 32276,
+    "valid": 32276
+  },
+  "parquet": {
+    "prices_v001.parquet": "1e9d2c016c85ef1895e76167e4f5aabb37383e0cbd842d7bbc34a01800ed58e2",
+    "clean_prices_v001.parquet": "d0f57c60b7a8a7a9fc692e4f49f16e13806145738a49d8a222adca25809f1446",
+    "corporate_actions_v001.parquet": "e29bbab1d2bec3811bfaaa97ce6ea1d9858700cc7736de63d11a634c006008aa"
+  },
+  "files": {
+    "market.json": "ec770b99d10996498d62e6d62ac9518f39c6d533ef8067e679edf4f2a4e44f03",
+    "risk.json": "252f85b371619b89f0bae3089688439934ab778f7df8a712e89a7faeb97c02fe",
+    "backtest.json": "2ff1781e0642a700eab5e6c281577698afc5cc8684bf427c2e13bf37e251bc27",
+    "fundamentals.json": "ba73f103793f5c0d6e8dc338ca1d747ecced49e05fe434cb4bb7acf222e52d57",
+    "manifest.json": "e3f07c63999a91355a764e17f20d9dfd81964a9c26a01f9d0528619ed16aa809"
+  }
+}

@@ -1,9 +1,11 @@
 # Phase 11 dashboard - GitHub Pages deployment
 #
-# The synthetic fixtures are NOT committed (dashboard/src/data/ is gitignored),
-# so the workflow regenerates them from the seed before building. The generator
-# is deterministic and uses only the Python standard library, so this is
-# reproducible rather than "whatever happened to be on the machine".
+# dashboard/src/data/ carries the committed acquisition bundle: REAL artifacts
+# (synthetic:false) where they exist and fixture artifacts for surfaces still
+# pending (ML, portfolio, universe identity copy). The generator below
+# regenerates only the fixture surfaces - its guard skips every real artifact -
+# so the deployed site serves the same real data as the local tree while the
+# fixture path stays deterministic (stdlib only, no pip install needed).
 
 name: Deploy dashboard to Pages
 

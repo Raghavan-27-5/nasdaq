@@ -58,9 +58,11 @@ backtests/
 # Dashboard
 dashboard/node_modules/
 dashboard/dist/
-dashboard/src/data/
 dashboard/.vite/
 dashboard/*.tsbuildinfo
+# NOTE: dashboard/src/data/ is deliberately NOT ignored - the acquisition
+# bundle (real artifacts + pending fixture surfaces) is committed so GitHub
+# Pages serves the same data as the local tree. See PHASE_LOG D0025.
 
 # Local live-acquisition artifacts (canonical copy goes to Drive)
 artifacts/acquisition_v001/

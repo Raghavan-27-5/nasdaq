@@ -55,6 +55,7 @@ const DECISIONS = [
   ['D0022', '2026-10-16', '3', 'Stooq proof-of-work solver disabled; Yahoo remains the designated source', 'ALLOW_STOOQ_POW=False in acquisition notebook', 'LOCKED'],
   ['D0023', '2026-10-16', '3', 'Offline dry-run harness is the pre-flight gate for any live Colab acquisition run', 'dry_run_notebook.py — executes all cells, audits bundle contract', 'LOCKED'],
   ['D0024', '2026-10-16', '3', 'First real acquisition executed (live mode): fixed normalise() tz-alignment frame loss + yfinance corporate-action capture; 23/23 series, 320 actions, 0 failures', 'validation PASS 26 checks; audit 103/103; bundle installed to dashboard (partial-real)', 'LOCKED'],
+  ['D0025', '2026-10-16', '11', 'Acquisition bundle committed to the public repo — GitHub Pages renders real data; CI regenerates only fixture surfaces via the synthetic:false guard', 'dashboard/src/data no longer gitignored; owner-approved (public EOD prices)', 'LOCKED'],
 ] as const
 
 const OPEN_ISSUES = [
