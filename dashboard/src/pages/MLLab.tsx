@@ -8,6 +8,7 @@ import { Sparkline } from '@/components/charts/primitives'
 import { timeSeriesOption, rankBarOption } from '@/lib/chartopts'
 import { C } from '@/lib/palette'
 import { models, market } from '@/lib/data'
+import { modelsAreSynthetic } from '@/lib/provenance'
 import { useApp } from '@/lib/store'
 import { nf, pct, ratioSigned, signed } from '@/lib/format'
 
@@ -260,7 +261,10 @@ export function MLLab() {
             )}
           </Panel>
 
-          <Panel title="Feature importance" subtitle="Gain-based split importance · synthetic">
+          <Panel
+            title="Feature importance"
+            subtitle={`Gain-based split importance${modelsAreSynthetic ? ' · synthetic' : ''}`}
+          >
             <EChart option={fiOption} height={244} />
             <p className="mt-1.5 border-t border-ink-700 pt-2 text-2xs leading-relaxed text-fg-mute">
               Momentum and realised volatility dominate. This is expected — and is exactly why the
@@ -275,7 +279,15 @@ export function MLLab() {
           title="Walk-forward folds"
           subtitle="Expanding training window · purged and embargoed · OOS test never used for tuning"
           pad={false}
-          actions={<Badge tone="warn">synthetic</Badge>}
+          actions={
+            modelsAreSynthetic ? (
+              <Badge tone="warn" title="Model outputs are a synthetic fixture until the Phase 6/7 walk-forward training run lands.">
+                synthetic
+              </Badge>
+            ) : (
+              <Badge tone="pos">real</Badge>
+            )
+          }
         >
           <div className="max-h-[300px] overflow-auto">
             <table className="tbl">

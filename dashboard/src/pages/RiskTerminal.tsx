@@ -6,6 +6,7 @@ import { EChart } from '@/components/charts/EChart'
 import { ContributionBar } from '@/components/charts/primitives'
 import { C, CORR_RAMP } from '@/lib/palette'
 import { risk, portfolio } from '@/lib/data'
+import { riskBookIsPlaceholder, riskIsReal } from '@/lib/provenance'
 import type { CallbackDataParams } from 'echarts/types/dist/shared'
 import { useApp } from '@/lib/store'
 import { nf, pct, pctSigned } from '@/lib/format'
@@ -15,6 +16,13 @@ export function RiskTerminal() {
   const [mode, setMode] = useState<'corr' | 'beta'>('corr')
 
   const tickers = risk.tickers
+
+  // Book weights follow the artifact basis: equal-weight reference weights while
+  // the optimised (Phase 9) book does not exist, fixture weights otherwise.
+  const wOf = (t: string): number =>
+    riskBookIsPlaceholder
+      ? (risk.reference_weights?.[t] ?? 0)
+      : (portfolio.weights[t] ?? 0)
 
   const heatmapData = useMemo(() => {
     const out: [number, number, number][] = []
@@ -157,7 +165,7 @@ export function RiskTerminal() {
               number,
               number,
             ],
-            w: portfolio.weights[t] ?? 0,
+            w: wOf(t),
           })),
           symbolSize: (d: unknown) => 7 + Math.sqrt((d as { w: number }).w) * 30,
           itemStyle: {
@@ -187,7 +195,9 @@ export function RiskTerminal() {
           label: t,
           cctr: risk.cctr[t] ?? 0,
           mctr: risk.mctr[t] ?? 0,
-          w: portfolio.weights[t] ?? 0,
+          w: riskBookIsPlaceholder
+            ? (risk.reference_weights?.[t] ?? 0)
+            : (portfolio.weights[t] ?? 0),
         }))
         .sort((a, b) => b.cctr - a.cctr),
     [tickers],
@@ -242,6 +252,13 @@ export function RiskTerminal() {
           ))}
         </div>
 
+        {riskBookIsPlaceholder && (
+          <p className="text-2xs leading-relaxed text-fg-mute">
+            Portfolio-level statistics describe the equal-weight reference book of all tradable
+            names — optimised weights land with Phase 9.
+          </p>
+        )}
+
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
           <Panel
             title={mode === 'corr' ? 'Correlation matrix' : 'Benchmark beta map'}
@@ -250,14 +267,29 @@ export function RiskTerminal() {
                 ? 'Trailing 756 trading days · overlapping windows truncated at the later listing date'
                 : 'Bubble area = portfolio weight · dashed crosshair at beta 1.0'
             }
-            actions={<Badge tone="warn">synthetic</Badge>}
+            actions={
+              riskIsReal ? (
+                <Badge
+                  tone="pos"
+                  title="Correlation, betas and volatility are computed from real acquired prices. Contributions describe the equal-weight reference book."
+                >
+                  real
+                </Badge>
+              ) : (
+                <Badge tone="warn">synthetic</Badge>
+              )
+            }
           >
             <EChart option={mode === 'corr' ? corrOption : betaOption} height={424} />
           </Panel>
 
           <Panel
             title="Risk contributions"
-            subtitle="Component contribution to portfolio volatility at target weights"
+            subtitle={
+              riskBookIsPlaceholder
+                ? 'Component contribution to volatility · equal-weight reference book'
+                : 'Component contribution to portfolio volatility at target weights'
+            }
             pad={false}
           >
             <div className="max-h-[424px] overflow-auto">

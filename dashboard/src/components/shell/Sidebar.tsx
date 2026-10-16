@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import { ROUTES, useApp } from '@/lib/store'
 import type { RouteId } from '@/lib/store'
 import { manifest, universe } from '@/lib/data'
+import { dataMode } from '@/lib/provenance'
 import { Badge } from '@/components/ui/Value'
 
 /** Minimal 14px stroke icons. Geometric, consistent weight, no icon library. */
@@ -132,7 +133,7 @@ export function Sidebar() {
       <div className="space-y-2 border-t border-ink-700 px-4 py-3">
         <div className="flex items-center justify-between">
           <span className="text-3xs uppercase tracking-[0.12em] text-fg-mute">Data</span>
-          <Badge tone="warn">synthetic</Badge>
+          <Badge tone={dataMode.tone}>{dataMode.label}</Badge>
         </div>
         <dl className="space-y-1 font-mono text-3xs text-fg-mute">
           <div className="flex justify-between gap-2">
@@ -149,7 +150,10 @@ export function Sidebar() {
           </div>
           <div className="flex justify-between gap-2">
             <dt>WINDOW</dt>
-            <dd className="text-fg-dim">20-01 → 26-09</dd>
+            <dd className="text-fg-dim">
+              {universe.research_window.start.slice(2, 7)} →{' '}
+              {universe.research_window.end_inclusive.slice(2, 7)}
+            </dd>
           </div>
         </dl>
       </div>

@@ -6,7 +6,8 @@ import { Value, Badge, MiniBar } from '@/components/ui/Value'
 import { EChart } from '@/components/charts/EChart'
 import { timeSeriesOption, rankBarOption } from '@/lib/chartopts'
 import { C } from '@/lib/palette'
-import { portfolio, risk, backtest, TICKERS, TICKER_META, FUND } from '@/lib/data'
+import { portfolio, risk, backtest, TICKERS, TICKER_META, FUND, universe } from '@/lib/data'
+import { portfolioIsSynthetic, riskBookIsPlaceholder } from '@/lib/provenance'
 import { useApp } from '@/lib/store'
 import { nf, pct, pctSigned, bps, humanise, fmtDate } from '@/lib/format'
 
@@ -27,6 +28,10 @@ const SECTOR_LABEL: Record<string, string> = {
 export function PortfolioOptimizer() {
   const { selectTicker, ticker } = useApp()
   const [sol, setSol] = useState<Sol>('constrained')
+  // Fixture weights exist while the risk artifact describes a different book
+  // (equal-weight reference). Risk contributions for fixture weights are then
+  // not computed anywhere and must not be implied.
+  const bookMismatch = portfolioIsSynthetic && riskBookIsPlaceholder
 
   const weights =
     sol === 'constrained' ? portfolio.weights : sol === 'unconstrained' ? portfolio.unconstrained_weights : portfolio.equal_weight
@@ -40,8 +45,8 @@ export function PortfolioOptimizer() {
         mu: portfolio.prediction_inputs.find((p) => p.ticker === t)?.mu_21d ?? 0,
         pv: portfolio.prediction_inputs.find((p) => p.ticker === t)?.pred_vol_21d ?? 0,
         sector: portfolio.sector_of[t],
-        mctr: risk.mctr[t] ?? 0,
-        cctr: risk.cctr[t] ?? 0,
+        mctr: riskBookIsPlaceholder ? null : (risk.mctr[t] ?? 0),
+        cctr: riskBookIsPlaceholder ? null : (risk.cctr[t] ?? 0),
         rank: FUND[t].rank,
       })).sort((a, b) => b.w - a.w),
     [weights],
@@ -113,6 +118,15 @@ export function PortfolioOptimizer() {
       }
     >
       <div className="space-y-3">
+        {bookMismatch && (
+          <div className="rounded border border-sig-warn/30 bg-sig-warn/[0.06] px-4 py-2.5 text-2xs leading-relaxed text-fg-base">
+            <span className="font-semibold text-sig-warn">Fixture preview. </span>
+            Weights, predicted returns and constraint results on this page are synthetic until the
+            Phase-6 predictions and Phase-9 optimiser run. MCTR / CCTR columns are suppressed: the
+            real risk artifact describes the equal-weight reference book, not these weights.
+          </div>
+        )}
+
         {/* Headline */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
           {(
@@ -122,7 +136,7 @@ export function PortfolioOptimizer() {
               ['Positions', String(rows.filter((r) => r.w > 0.0001).length), 'flat'],
               ['Annual turnover', pct(portfolio.annual_turnover, 0), 'flat'],
               ['Cost / turnover', bps(portfolio.annual_turnover * 10, 0), 'flat'],
-              ['Effective names', nf(risk.portfolio.effective_names, 1), 'flat'],
+              ['Effective names', bookMismatch ? '—' : nf(risk.portfolio.effective_names, 1), 'flat'],
             ] as const
           ).map(([label, value, tone]) => (
             <div key={label} className="rounded border border-ink-700 bg-ink-850 px-4 py-3">
@@ -148,7 +162,18 @@ export function PortfolioOptimizer() {
                   ? 'Same objective without concentration limits — reference only'
                   : 'Equal-weight reference benchmark'
             }
-            actions={<Badge tone="warn">synthetic</Badge>}
+            actions={
+              portfolioIsSynthetic ? (
+                <Badge
+                  tone="warn"
+                  title="Weights are a synthetic fixture until the Phase-6 predictions and Phase-9 optimiser run land."
+                >
+                  synthetic
+                </Badge>
+              ) : (
+                <Badge tone="pos">real</Badge>
+              )
+            }
             pad={false}
           >
             <div className="max-h-[420px] overflow-auto">
@@ -262,10 +287,19 @@ export function PortfolioOptimizer() {
               <div className="mt-3 border-t border-ink-700 pt-2.5">
                 <Eyebrow>Hirschman index</Eyebrow>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <Value size="lg">{nf(risk.portfolio.herfindahl, 4)}</Value>
-                  <span className="text-2xs text-fg-mute">
-                    {risk.portfolio.effective_names} effective names
-                  </span>
+                  {bookMismatch ? (
+                    <span className="text-2xs leading-relaxed text-fg-mute">
+                      Risk-artifact concentration statistics describe the equal-weight book —
+                      recomputed for these weights with Phase 9.
+                    </span>
+                  ) : (
+                    <>
+                      <Value size="lg">{nf(risk.portfolio.herfindahl, 4)}</Value>
+                      <span className="text-2xs text-fg-mute">
+                        {risk.portfolio.effective_names} effective names
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </Panel>
@@ -326,7 +360,7 @@ export function PortfolioOptimizer() {
                   ['Optimizer version', portfolio.optimizer_version],
                   ['Objective version', portfolio.objective_version],
                   ['As of', portfolio.as_of],
-                  ['Universe version', '0.1.0'],
+                  ['Universe version', `v${universe.universe_version}`],
                 ] as const
               ).map(([k, v]) => (
                 <div key={k} className="flex items-baseline justify-between gap-3">

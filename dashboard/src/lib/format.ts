@@ -45,25 +45,33 @@ export const mult = (v: number | null | undefined, d = 1): string =>
 export const bps = (v: number | null | undefined, d = 0): string =>
   v === null || v === undefined || !Number.isFinite(v) ? '—' : `${v.toFixed(d)} bps`
 
-/** ISO date -> "02 Jan 2020". */
-export const fmtDate = (iso: string): string => {
+/** ISO date -> "02 Jan 2020". Returns an em dash for missing input. */
+export const fmtDate = (iso: string | null | undefined): string => {
+  if (!iso) return '—'
   const d = new Date(`${iso}T00:00:00`)
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  return Number.isNaN(d.getTime())
+    ? '—'
+    : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-export const fmtDateShort = (iso: string): string => {
+export const fmtDateShort = (iso: string | null | undefined): string => {
+  if (!iso) return '—'
   const d = new Date(`${iso}T00:00:00`)
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+  return Number.isNaN(d.getTime())
+    ? '—'
+    : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
 }
 
 export const fmtYear = (iso: string): string => iso.slice(0, 4)
 
-/** Human category label: AI_COMPUTE -> "AI Compute". */
-export const humanise = (s: string): string =>
-  s
-    .split('_')
-    .map((w) => (w.length <= 3 ? w : w[0] + w.slice(1).toLowerCase()))
-    .join(' ')
+/** Human category label: AI_COMPUTE -> "AI Compute". Null-safe. */
+export const humanise = (s: string | null | undefined): string =>
+  !s
+    ? '—'
+    : s
+        .split('_')
+        .map((w) => (w.length <= 3 ? w : w[0] + w.slice(1).toLowerCase()))
+        .join(' ')
 
 export const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v))
 

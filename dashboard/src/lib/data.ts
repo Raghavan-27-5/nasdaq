@@ -88,6 +88,12 @@ export interface FundamentalsArtifact {
   factor_defs: FactorDef[]
   as_of: string
   constituents: FundamentalRow[]
+  /**
+   * True when only market-derived factors (momentum, volatility, drawdown,
+   * correlation) are present and the fundamental factors require the Phase-1
+   * sourced dataset. Set by the Colab acquisition notebook.
+   */
+  fundamental_factors_pending?: boolean
 }
 
 export interface Fold {
@@ -166,6 +172,13 @@ export interface RiskArtifact {
   synthetic: boolean
   disclaimer: string
   as_of: string
+  /**
+   * Which book the portfolio-level statistics describe. The acquisition run
+   * emits 'equal_weight_placeholder' until Phase-9 optimiser weights exist.
+   */
+  portfolio_basis?: string
+  /** Weights actually used for the portfolio-level statistics (equal-weight book). */
+  reference_weights?: Record<string, number>
   covariance: {
     method: string
     window_days: number
@@ -213,6 +226,8 @@ export interface BacktestArtifact {
   rebalance: string
   cost_bps_round_trip: number
   series: Record<string, number[]>
+  /** Per-curve provenance: 'real' | 'synthetic'. Emitted by the acquisition run. */
+  series_provenance?: Record<string, string>
   performance: Record<
     string,
     {
@@ -248,6 +263,16 @@ export interface ManifestArtifact {
   generated_at: string
   real_vs_synthetic: { surface: string; status: string; source: string }[]
   pending_real_artifacts: string[]
+  /** Data artifact version, e.g. 'v001' (present once a real acquisition has run). */
+  data_version?: string
+  /** Summary of the Colab acquisition run that produced the real market artifacts. */
+  acquisition?: {
+    notebook: string
+    executed_at: string
+    sources: string
+    validation: string
+    trading_days: number
+  }
 }
 
 // ---------------------------------------------------------------------------

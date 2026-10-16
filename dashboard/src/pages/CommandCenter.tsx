@@ -20,6 +20,14 @@ import {
   RESEARCH_END,
   TRUNCATED,
 } from '@/lib/data'
+import {
+  fundamentalFactorsPending,
+  ledgerStatus,
+  modelsAreSynthetic,
+  portfolioIsSynthetic,
+  riskBookIsPlaceholder,
+  seriesProvenance,
+} from '@/lib/provenance'
 import { useApp } from '@/lib/store'
 import { pct, pctSigned, nf, humanise, fmtDate } from '@/lib/format'
 
@@ -106,6 +114,8 @@ export function CommandCenter() {
 
   const binding = portfolio.constraints.filter((c) => c.binding)
   const alphaT = backtest.attribution.factors[0]?.tstat
+  const mlSim = seriesProvenance('ML_PORTFOLIO') !== 'real'
+  const attributionReal = backtest.series_provenance !== undefined
 
   return (
     <Page
@@ -145,14 +155,14 @@ export function CommandCenter() {
             label="Portfolio CAGR"
             value={pct(ml.cagr, 2)}
             tone={ml.cagr >= 0 ? 'pos' : 'neg'}
-            footnote={`vs QQQ ${pct(qqq.cagr, 2)}`}
+            footnote={`vs QQQ ${pct(qqq.cagr, 2)}${mlSim ? ' · ML placeholder' : ''}`}
           />
           <StatTile
             label="Portfolio Sharpe"
             value={nf(ml.sharpe, 2)}
             tone={ml.sharpe >= 1 ? 'pos' : 'flat'}
             sub="rf 0%"
-            footnote="OOS, net of 10bps RT"
+            footnote={mlSim ? 'Placeholder curve — Phase 6 pending' : 'OOS, net of 10bps RT'}
           />
           <StatTile
             label="Max Drawdown"
@@ -165,17 +175,21 @@ export function CommandCenter() {
             value={nf(m21.oos_ic_mean, 3)}
             tone={m21.oos_ic_mean > 0 ? 'pos' : 'neg'}
             sub={`ICIR ${nf(m21.icir, 2)}`}
-            footnote={`Hit rate ${pct(m21.hit_rate, 1)}`}
+            footnote={`Hit rate ${pct(m21.hit_rate, 1)}${modelsAreSynthetic ? ' · fixture' : ''}`}
           />
           <StatTile
             label="Factor Alpha"
-            value={alphaT === null ? '—' : nf(alphaT, 2)}
-            tone={alphaT !== null && alphaT > 2 ? 'pos' : 'flat'}
+            value={alphaT === null || alphaT === undefined ? '—' : nf(alphaT, 2)}
+            tone={alphaT !== null && alphaT !== undefined && alphaT > 2 ? 'pos' : 'flat'}
             sub="t-stat"
             footnote={
-              alphaT !== null && alphaT < 2
-                ? 'Not significant after factor control'
-                : 'Significant vs QQQ + SOXX'
+              alphaT === null || alphaT === undefined
+                ? 'Not available in this build'
+                : alphaT < 2
+                  ? 'Not significant after factor control'
+                  : attributionReal
+                    ? 'Equal-weight book vs QQQ + SOXX'
+                    : 'Significant vs QQQ + SOXX'
             }
           />
           <StatTile
@@ -195,7 +209,18 @@ export function CommandCenter() {
                 ? `Growth of 100 · ${backtest.oos_start} → ${backtest.oos_end} · ${backtest.rebalance}`
                 : `Growth of 100 · ${RESEARCH_START} → ${RESEARCH_END} (includes in-sample regime)`
             }
-            actions={<Badge tone="warn">synthetic</Badge>}
+            actions={
+              mlSim ? (
+                <Badge
+                  tone="warn"
+                  title="The ML portfolio curve is a synthetic placeholder until Phase 6/9/10 outputs land; EW and benchmark curves are real."
+                >
+                  ML curve · sim
+                </Badge>
+              ) : (
+                <Badge tone="pos">real</Badge>
+              )
+            }
           >
             {curveView === 'equity' ? (
               <EChart option={curveOption} height={306} />
@@ -227,7 +252,19 @@ export function CommandCenter() {
           </Panel>
 
           <div className="flex flex-col gap-3">
-            <Panel title="Signal quality" subtitle="21D forward return · out-of-sample">
+            <Panel
+              title="Signal quality"
+              subtitle="21D forward return · out-of-sample"
+              actions={
+                modelsAreSynthetic ? (
+                  <Badge tone="warn" title="Model metrics are a synthetic fixture — LightGBM training runs in Phase 6/7.">
+                    fixture
+                  </Badge>
+                ) : (
+                  <Badge tone="pos">real</Badge>
+                )
+              }
+            >
               <div className="space-y-2.5">
                 {(
                   [
@@ -257,7 +294,15 @@ export function CommandCenter() {
               </p>
             </Panel>
 
-            <Panel title="Risk posture" subtitle="At optimised weights" className="flex-1">
+            <Panel
+              title="Risk posture"
+              subtitle={
+                riskBookIsPlaceholder
+                  ? 'Equal-weight reference book · real prices'
+                  : 'At optimised weights'
+              }
+              className="flex-1"
+            >
               <dl className="space-y-2">
                 {(
                   [
@@ -275,6 +320,11 @@ export function CommandCenter() {
                   </div>
                 ))}
               </dl>
+              {portfolioIsSynthetic && (
+                <p className="mt-2.5 border-t border-ink-700 pt-2 text-2xs leading-relaxed text-fg-mute">
+                  Turnover is read from the synthetic fixture; optimised weights land with Phase 9.
+                </p>
+              )}
             </Panel>
           </div>
         </div>
@@ -283,7 +333,11 @@ export function CommandCenter() {
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
           <Panel
             title="Universe ranking"
-            subtitle="Composite of 10 documented factors · rank-standardised within the 20-name universe"
+            subtitle={
+              fundamentalFactorsPending
+                ? `Composite of ${fundamentals.factor_defs.length} market-derived factors · fundamental factors pending Phase 1`
+                : 'Composite of 10 documented factors · rank-standardised within the 20-name universe'
+            }
             actions={
               <button
                 type="button"
@@ -332,7 +386,7 @@ export function CommandCenter() {
                       <td className="num">
                         <span className={f.composite_score >= 0 ? 'text-sig-pos' : 'text-sig-neg'}>
                           {f.composite_score >= 0 ? '+' : ''}
-                          {f.composite_score.toFixed(3)}
+                          {nf(f.composite_score, 3)}
                         </span>
                       </td>
                       <td>
@@ -345,7 +399,9 @@ export function CommandCenter() {
                       <td className="num">
                         <Delta>{pctSigned(f.momentum_12_1 * 100, 1)}</Delta>
                       </td>
-                      <td className="num text-fg-dim">{nf(f.fwd_pe, 1)}x</td>
+                      <td className="num text-fg-dim">
+                        {f.fwd_pe === null || f.fwd_pe === undefined ? '—' : `${nf(f.fwd_pe, 1)}x`}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -435,15 +491,18 @@ export function CommandCenter() {
         <div className="grid gap-3 lg:grid-cols-3">
           <Panel title="Data integrity" subtitle="What this build is actually made of">
             <div className="space-y-2">
-              {manifest.real_vs_synthetic.slice(0, 4).map((r) => (
-                <div key={r.surface} className="flex items-start gap-2.5">
-                  <Badge tone={r.status === 'REAL' ? 'pos' : 'warn'}>{r.status}</Badge>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-2xs text-fg-base">{r.surface}</div>
-                    <div className="truncate font-mono text-3xs text-fg-mute">{r.source}</div>
+              {manifest.real_vs_synthetic.slice(0, 4).map((r) => {
+                const st = ledgerStatus(r.status)
+                return (
+                  <div key={r.surface} className="flex items-start gap-2.5">
+                    <Badge tone={st.tone}>{st.label}</Badge>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-2xs text-fg-base">{r.surface}</div>
+                      <div className="truncate font-mono text-3xs text-fg-mute">{r.source}</div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
             <button
               type="button"

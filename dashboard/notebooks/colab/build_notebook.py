@@ -4,12 +4,21 @@ build_notebook.py — assembles the Colab data-acquisition notebook.
 
 Kept as a builder (rather than hand-edited .ipynb JSON) so the cell logic is
 reviewable and diffable, and the notebook can be regenerated deterministically.
+
+v002: fixed VaR/ES quantile+sign bug, real Ledoit-Wolf diagnostics, computed
+stress scenarios, corporate-action capture, canonical manifest ledger,
+full-panel clean Parquet, Parquet checksums, cell order fixed (no swap hack).
 """
 
 import json
 from pathlib import Path
 
-OUT = Path(__file__).resolve().parent / "nasdaq_ai_quant_acquire_v001.ipynb"
+OUT = Path(__file__).resolve().parent / "nasdaq_ai_quant_acquire_v002.ipynb"
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+UNIVERSE_VERIFICATION = (
+    REPO_ROOT / "artifacts" / "manifests" / "universe_verification_v001.json"
+)
 
 
 def md(src: str) -> dict:
@@ -46,10 +55,20 @@ notebook runs, every *market-derived* figure in the terminal is real:
 | All price series, QQQ / SOXX / SPY | LightGBM IC, ICIR, walk-forward folds, SHAP |
 | Correlation matrix, betas, volatilities | Constrained portfolio weights |
 | Drawdowns, momentum, equal-weight benchmark | Factor scores that need fundamentals |
-| Calendar-year and regime returns | Forward P/E, revenue growth, FCF quality |
+| Ledoit-Wolf covariance diagnostics | Forward P/E, revenue growth, FCF quality |
+| Realised stress drawdowns (2020 / 2022 / 2025) | ML portfolio equity curve |
+| Corporate actions (splits / dividends) record | |
 
 The ML portfolio curve remains a flagged placeholder — producing a real one requires a
 trained model (Phase 6), not just prices.
+
+**v002 changes.** Fixed the VaR/ES quantile+sign bug (95/99 now both correct, emitted as
+positive loss magnitudes); real Ledoit-Wolf shrinkage and condition numbers; stress
+scenarios computed from realised benchmark drawdowns; splits/dividends captured from the
+chart API; full-panel clean Parquet with `is_tradable` / `is_valid` flags; SHA-256 of
+every Parquet in the run manifest; `manifest.json` (canonical 12-row provenance ledger +
+acquisition block) written straight into the dashboard bundle. Stooq proof-of-work
+solving is disabled to match the README.
 
 **Compute boundary.** This runs in Colab, never on the local control plane. See `AGENTS.md` §2.
 
@@ -59,16 +78,19 @@ trained model (Phase 6), not just prices.
 
 1. Runtime → **T4 GPU** or **CPU** (CPU is fine; this is I/O bound).
 2. Run cells **top to bottom**. Do not skip the validation cell — it hard-fails by design.
-3. The final cell prints a download link for the dashboard bundle.
+3. The final cell prints a download link for the dashboard bundle. Unzip it over
+   `dashboard/src/data/` locally — the real files replace the fixtures in place.
+   Keep `run_manifest.json`; it is the audit record of the run.
 
 **Frozen research window** (`PROJECT_SPEC.md` §6): `2020-01-01` → `2026-09-22` inclusive EOD.
 """),
     code(r"""
 # --- Cell 1: dependencies -------------------------------------------------
 # Colab ships pandas/numpy/matplotlib. yfinance is the project-designated source
-# (PROJECT_SPEC.md §6). pyarrow is required for the Parquet artifacts and is
-# not guaranteed to be present, so it is installed explicitly rather than assumed.
-!pip -q install yfinance pyarrow requests 2>&1 | tail -2
+# (PROJECT_SPEC.md §6). pyarrow is required for the Parquet artifacts and
+# scikit-learn for the Ledoit-Wolf covariance estimator - neither is guaranteed
+# to be present, so they are installed explicitly rather than assumed.
+!pip -q install yfinance pyarrow requests scikit-learn 2>&1 | tail -2
 
 import sys, json, math, time, re, io, hashlib, textwrap, warnings
 import urllib.parse
@@ -86,6 +108,9 @@ print("numpy   ", np.__version__)
 
 import yfinance as yf
 print("yfinance", yf.__version__)
+
+import sklearn
+print("sklearn ", sklearn.__version__)
 """),
     md(r"""
 ## Cell 2 — Mount Drive and declare paths
@@ -101,6 +126,7 @@ drive.mount('/content/drive')
 SPEC_VERSION     = "0.1.0"
 UNIVERSE_VERSION = "0.1.0"
 DATA_VERSION     = "v001"
+NOTEBOOK_NAME    = "nasdaq_ai_quant_acquire_v002.ipynb"
 
 # Frozen research window. END is inclusive per spec, but yfinance treats `end`
 # as EXCLUSIVE - so we request one day later and assert the result later.
@@ -131,10 +157,18 @@ BENCHMARKS = ["QQQ","SOXX","SPY"]
 # data is ever created (PROJECT_SPEC.md §7, DATA_CONTRACT §18).
 TRUNCATED_EXPECTED = {"PLTR": "2020-09", "CRWV": "2025-03"}
 
+# Constituent identity (company name, AI category, security class) transcribed
+# from the Phase-0 verification artifact
+# (artifacts/manifests/universe_verification_v001.json) at notebook-build time.
+# The notebook never invents company metadata; if this dict is empty the
+# fundamentals rows carry blank identity fields rather than made-up values.
+UNIVERSE_META = __UNIVERSE_META__
+
 print("window   ", START, "->", END_INCLUSIVE)
 print("raw      ", RAW_PATH)
 print("dashboard", DASH_PATH)
 print("names    ", len(UNIVERSE), "| benchmarks", BENCHMARKS)
+print("meta     ", len(UNIVERSE_META), "constituents embedded from universe_verification_v001.json")
 """),
     md(r"""
 ## Cell 3 — Download real EOD data
@@ -209,6 +243,12 @@ RL = RateLimiter()
 SESSION = requests.Session()
 SESSION.headers.update({"User-Agent": _UA, "Accept": "application/json"})
 
+# Corporate actions observed per ticker (dividends/splits from the chart API's
+# `events` block). Captured so splits cannot silently poison adjusted-close
+# returns and so the run manifest records what the acquired data actually
+# contains. Fallback sources do not report actions; that is recorded per ticker.
+ACTIONS = {}
+
 
 def fetch_chart_api(ticker, tries=3):
     query = f"?period1={P1}&period2={P2}&interval=1d&events=div%2Csplit"
@@ -240,6 +280,23 @@ def fetch_chart_api(ticker, tries=3):
             ts = result["timestamp"]
             q = result["indicators"]["quote"][0]
             ac = (result["indicators"].get("adjclose") or [{}])[0].get("adjclose")
+            ev = result.get("events") or {}
+            events = []
+            for e in (ev.get("dividends") or {}).values():
+                events.append({
+                    "type": "dividend",
+                    "date": pd.Timestamp(e["date"], unit="s", tz="UTC").date().isoformat(),
+                    "amount": round(float(e.get("amount", 0.0)), 6),
+                })
+            for e in (ev.get("splits") or {}).values():
+                events.append({
+                    "type": "split",
+                    "date": pd.Timestamp(e["date"], unit="s", tz="UTC").date().isoformat(),
+                    "numerator": float(e.get("numerator", 0.0)),
+                    "denominator": float(e.get("denominator", 0.0)),
+                    "ratio": e.get("splitRatio"),
+                })
+            ACTIONS[ticker] = sorted(events, key=lambda x: x["date"])
             rows = {}
             for k, tstamp in enumerate(ts):
                 day = pd.Timestamp(tstamp, unit="s", tz="UTC").tz_convert(None).normalize()
@@ -305,12 +362,11 @@ def fetch_yfinance(ticker, tries=2):
 # that SHA256(challenge + n) begins with `d` zeros, POST it to /__verify, then
 # re-request with the issued auth cookie.
 #
-# Verified behaviour: the solver is correct - /__verify answers HTTP 200 and
-# issues the auth cookie. Whether stooq then serves the CSV depends on the
-# client IP; from a blocked address it answers "Access denied" regardless. So
-# this is a genuine third source rather than dead code, and its failure is
-# reported honestly rather than silently skipped.
-ALLOW_STOOQ_POW = True
+# Solver kept for reference but DISABLED by default, matching the README: the
+# verified behaviour is that /__verify issues the auth cookie, yet stooq still
+# answers "Access denied" from Colab's IP range. The previous verified run never
+# needed it (chart API primary). Set True to re-enable the attempt.
+ALLOW_STOOQ_POW = False
 
 
 def _solve_stooq_pow(session, html):
@@ -474,6 +530,8 @@ for idx, tk in enumerate(UNIVERSE + BENCHMARKS):
         "rows": int(len(clean)),
         "first": clean.index.min().date().isoformat(),
         "last":  clean.index.max().date().isoformat(),
+        "corporate_actions": (len(ACTIONS.get(tk, [])) if src == "yahoo_chart_api"
+                              else "not-reported-by-source"),
     }
     report["sources"][tk] = src
     print(f"  {tk:6s} ok  {len(clean):5d} rows  {clean.index.min().date()} -> {clean.index.max().date()}  [{src}]")
@@ -486,6 +544,9 @@ if not report["failures"]:
     for t, s_ in report["sources"].items():
         srcs[s_] = srcs.get(s_, 0) + 1
     print("sources used:", srcs)
+    n_actions = sum(len(v) for v in ACTIONS.values())
+    print(f"corporate actions captured: {n_actions} "
+          "(dividends/splits from the chart API; fallbacks do not report them)")
     print("elapsed pacing: global delay settled at %.1fs" % RL.delay)
 """),
     md(r"""
@@ -555,6 +616,30 @@ if not missing:
             if mx > 0.45:
                 warnings_out.append(f"{tk}: implausible one-day move {mx:.1%} - inspect")
 
+    # Adjusted-close integrity -----------------------------------------
+    for tk, df in frames.items():
+        if (df["adj_close"] <= 0).any():
+            errors.append(f"{tk}: non-positive adjusted close")
+
+    # Full-window coverage for names listed before the window opened: the
+    # almost-balanced panel depends on it. Truncated names are checked apart.
+    for tk in UNIVERSE:
+        if tk in frames and tk not in TRUNCATED_EXPECTED:
+            first = frames[tk].index.min()
+            check(f"{tk}_full_window_history",
+                  first <= pd.Timestamp(START) + pd.Timedelta(days=10),
+                  f"first observation {first.date()}")
+
+    # Post-listing depth for truncated names (PLTR ~2020-09, CRWV ~2025-03).
+    for tk, need in (("PLTR", 1400), ("CRWV", 300)):
+        if tk in frames:
+            obs = len(frames[tk])
+            check(f"{tk}_min_observations", obs >= need, f"{obs} rows (need >= {need})")
+
+    # A plausible trading calendar keeps the panel indexing honest.
+    union_days = sorted(set().union(*[set(f.index) for f in frames.values()]))
+    check("trading_day_count", 1550 <= len(union_days) <= 1800, f"{len(union_days)} union days")
+
 # Verdict ---------------------------------------------------------------
 print(f"checks run: {len(checks)}   failures: {len(errors)}   warnings: {len(warnings_out)}\n")
 for c in checks:
@@ -572,6 +657,14 @@ if errors:
     raise SystemExit("Validation failed. Fix acquisition before continuing.")
 print("\nValidation PASSED. Proceeding.")
 """),
+    md(r"""
+## Cell 5 — Canonical Parquet artifacts on Drive
+
+Raw per-ticker frames, the full-panel clean dataset (explicit `is_tradable` / `is_valid`
+flags — nulls where a name had not listed yet, never filled), and the corporate-actions
+record. SHA-256 of each Parquet is carried into the run manifest. Versioned, never
+overwritten (`WORKTREE.md` §4).
+"""),
     code(r"""
 # --- Cell 5: canonical artifacts to Drive ---------------------------------
 import os
@@ -581,31 +674,75 @@ os.makedirs(os.path.dirname(CLEAN_PATH), exist_ok=True)
 os.makedirs(DASH_PATH, exist_ok=True)
 os.makedirs(os.path.dirname(RUN_PATH), exist_ok=True)
 
+# Canonical calendar shared by every downstream artifact and the dashboard:
+# the union of all series' observation dates up to the frozen cutoff. Defined
+# here so the clean panel and the dashboard JSON cannot drift apart.
+CAL = sorted(set().union(*[set(f.index) for f in frames.values()]))
+CAL = [d for d in CAL if d <= pd.Timestamp(END_INCLUSIVE)]
+
 all_px = pd.concat(frames.values(), axis=0).sort_index()
 all_px["universe_version"] = UNIVERSE_VERSION
 all_px["data_version"] = DATA_VERSION
 all_px.to_parquet(RAW_PATH, index=True)
 print("raw    ->", RAW_PATH, f"({len(all_px):,} rows)")
 
-# Clean frame: canonical calendar, nulls where a name was not yet tradable.
-clean = all_px[all_px["ticker"].isin(UNIVERSE)].copy()
-clean.to_parquet(CLEAN_PATH, index=True)
-print("clean  ->", CLEAN_PATH, f"({len(clean):,} rows)")
+# Clean panel: one row per (calendar date x name), materialised even before a
+# name listed. Nulls are explicit and flagged, never filled:
+#   is_tradable - the name traded that day (a source row exists)
+#   is_valid    - every OHLCV + adjusted-close value present, finite and > 0
+cal_idx = pd.DatetimeIndex(CAL)
+panel = []
+for tk in UNIVERSE:
+    f = frames[tk].reindex(cal_idx)
+    f["ticker"] = tk
+    f["is_tradable"] = f["close"].notna()
+    finite = np.isfinite(
+        f[["open", "high", "low", "close", "adj_close", "volume"]].to_numpy(dtype=float)
+    ).all(axis=1)
+    f["is_valid"] = finite & (f["close"] > 0) & (f["adj_close"] > 0)
+    panel.append(f)
+clean = pd.concat(panel)
+clean.index.name = "date"
+clean = clean.reset_index().sort_values(["ticker", "date"])
+clean["universe_version"] = UNIVERSE_VERSION
+clean["data_version"] = DATA_VERSION
+clean.to_parquet(CLEAN_PATH, index=False)
+print("clean  ->", CLEAN_PATH,
+      f"({len(clean):,} rows, {int(clean['is_tradable'].sum()):,} tradable, "
+      f"{int(clean['is_valid'].sum()):,} valid)")
+
+# Corporate actions (splits/dividends) observed by the primary source.
+_act_cols = ["ticker", "type", "date", "amount", "numerator", "denominator", "ratio"]
+if ACTIONS:
+    act = pd.DataFrame([{"ticker": tk, **e} for tk, evs in ACTIONS.items() for e in evs])
+    act = act.sort_values(["ticker", "date"]).reset_index(drop=True)
+else:
+    act = pd.DataFrame(columns=_act_cols)
+ACTIONS_PATH = f"{DRIVE}/{CLEAN_DIR}/corporate_actions_{DATA_VERSION}.parquet"
+act.to_parquet(ACTIONS_PATH, index=False)
+print("actions->", ACTIONS_PATH, f"({len(act):,} events)")
+
+# SHA-256 of every canonical artifact (recorded in the run manifest).
+PARQUET_HASHES = {}
+for p_ in (RAW_PATH, CLEAN_PATH, ACTIONS_PATH):
+    with open(p_, "rb") as fh:
+        PARQUET_HASHES[os.path.basename(p_)] = hashlib.sha256(fh.read()).hexdigest()
+for k_, v_ in PARQUET_HASHES.items():
+    print(f"  sha256 {k_:34s} {v_[:16]}...")
 """),
     md(r"""
-## Cell 6 — Market-derived fundamentals rows
+## Cell 6 — Dashboard artifacts (market.json, risk.json, backtest.json, fundamentals.json)
 
 This is the contract `dashboard/src/lib/data.ts` expects. **Nothing in the frontend needs
 to change** — the files drop straight into `dashboard/src/data/`.
 
 Market-derived statistics are **computed from these real prices** rather than authored, so
-every surface in the UI agrees with every other surface.
+every surface in the UI agrees with every other surface. The covariance diagnostics are a
+real Ledoit-Wolf fit; stress rows are realised benchmark drawdowns.
 """),
     code(r"""
 # --- Cell 6: dashboard artifacts -----------------------------------------
 rng = np.random.default_rng(20260925)
-CAL = sorted(set().union(*[set(f.index) for f in frames.values()]))
-CAL = [d for d in CAL if d <= pd.Timestamp(END_INCLUSIVE)]
 dates = [pd.Timestamp(d).date().isoformat() for d in CAL]
 n = len(dates)
 print("canonical trading days:", n, dates[0], "->", dates[-1])
@@ -725,19 +862,47 @@ for a in UNIVERSE:
     corr.append(row)
 
 idx = {t: i for i, t in enumerate(UNIVERSE)}
-WEIGHTS = json.load(open("/content/weights.json")) if os.path.exists("/content/weights.json") else {t: 0.05 for t in UNIVERSE}
 
-pv = math.sqrt(sum(WEIGHTS[a]*WEIGHTS[b]*corr[idx[a]][idx[b]]*
-                   per_ticker[a]["vol_annual"]*per_ticker[b]["vol_annual"]
-                   for a in UNIVERSE for b in UNIVERSE))
-mctr, cctr = {}, {}
-for a in UNIVERSE:
-    m = sum(WEIGHTS[b]*corr[idx[a]][idx[b]]*per_ticker[b]["vol_annual"] for b in UNIVERSE)
-    mctr[a] = round(m/pv, 4); cctr[a] = round(WEIGHTS[a]*m/pv, 4)
+# Reference book: equal weight across the 20 names until the Phase-9 optimiser
+# produces weights. /content/weights.json overrides when present.
+WEIGHTS = (json.load(open("/content/weights.json"))
+           if os.path.exists("/content/weights.json")
+           else {t: 0.05 for t in UNIVERSE})
+PORTFOLIO_BASIS = ("optimiser_weights" if os.path.exists("/content/weights.json")
+                   else "equal_weight_placeholder")
+
+# --- Ledoit-Wolf shrinkage covariance (REAL - Phase-8 diagnostics) ---------
+# Fitted on the complete-case trailing window: the last WINDOW observations on
+# which ALL 20 names are simultaneously observed (bounded by CRWV's 2025 IPO).
+# The dashboard heatmap keeps the raw sample correlation; portfolio-level
+# statistics below use the shrunk covariance.
+from sklearn.covariance import LedoitWolf
+
+_M20 = np.vstack([aligned[t] for t in UNIVERSE])           # 20 x n daily log returns
+_complete = ~np.isnan(_M20).any(axis=0)
+Y = _M20[:, _complete][:, -WINDOW:].T                      # obs x 20
+lw = LedoitWolf().fit(Y)
+SIGMA_D = lw.covariance_                                   # daily, shrunk
+SIGMA_RAW = np.cov(Y, rowvar=False, ddof=1)
+shrinkage = float(lw.shrinkage_)
+cond_raw = float(np.linalg.cond(SIGMA_RAW))
+cond_shrunk = float(np.linalg.cond(SIGMA_D))
+w_vec = np.array([WEIGHTS[t] for t in UNIVERSE])
+pv = float(np.sqrt(w_vec @ SIGMA_D @ w_vec)) * math.sqrt(252)     # annualised
+marg = (SIGMA_D @ w_vec) * math.sqrt(252) / pv                    # dimensionless
+mctr = {t: round(float(marg[i]), 4) for i, t in enumerate(UNIVERSE)}
+cctr = {t: round(float(w_vec[i] * marg[i]), 4) for i, t in enumerate(UNIVERSE)}
+print(f"ledoit-wolf: shrinkage={shrinkage:.4f}  obs={len(Y)}  "
+      f"cond(raw)={cond_raw:.0f}  cond(shrunk)={cond_shrunk:.0f}")
 
 def var_es(port_r, q):
-    v = np.quantile(port_r, 1-q)
-    return float(v), float(port_r[port_r <= v].mean())
+    # Historical quantile VaR / expected shortfall, emitted as POSITIVE loss
+    # magnitudes - the dashboard renders them with a loss tone. `q` is the
+    # confidence level (0.95 / 0.99); the loss tail is the 1-q quantile.
+    v = float(np.quantile(port_r, 1 - q))
+    tail = port_r[port_r <= v]
+    es = float(tail.mean()) if len(tail) else v
+    return abs(v), abs(es)
 
 # Equal-weight universe: average of the names TRADABLE on each date.
 # A name that has not listed yet is excluded rather than treated as zero.
@@ -752,13 +917,62 @@ ml_r = ew_r * 0.82 + rng.normal(0, 0.0042, n)
 ml_r[0] = 0.0
 
 pvar95, pes95 = var_es(ew_r[1:], 0.95)
-pvar99, pes99 = var_es(ew_r[1:], 0.01)
+pvar99, pes99 = var_es(ew_r[1:], 0.99)
 
 off = [corr[i][j] for i in range(len(UNIVERSE)) for j in range(i+1, len(UNIVERSE))]
 print(f"correlation: avg {np.mean(off):.3f}  min {np.min(off):.3f}  max {np.max(off):.3f}")
+print(f"VaR95 {pvar95:.4f}  ES95 {pes95:.4f}  VaR99 {pvar99:.4f}  ES99 {pes99:.4f}  (positive = loss)")
 """),
     code(r"""
-# --- Cell 7: write dashboard JSON ----------------------------------------
+# --- Cell 7: fundamentals rows (market-derived, real) ---------------------
+def build_fund_rows():
+    rows = []
+    for tk in UNIVERSE:
+        lv = np.array(levels[tk])
+        r  = np.array(returns[tk][1:])
+        mom = float(lv[-1]/lv[-253] - 1) if len(lv) > 253 else float(lv[-1]/lv[0]-1)
+        peak = float(np.max(lv[-252:]))
+        ac = float(np.mean([corr[idx[tk]][j] for j in range(len(UNIVERSE)) if j != idx[tk]]))
+        meta = UNIVERSE_META.get(tk, {})
+        rows.append({
+            "ticker": tk,
+            "company": meta.get("company", ""),
+            "ai_category": meta.get("ai_category", ""),
+            "sector": "",
+            "ai_revenue_exposure": None, "aicapex_exposure": None,
+            "revenue_growth": None, "fcf_quality": None, "earnings_revisions": None,
+            "fwd_pe": None, "price": round(float(lv[-1]), 2), "market_cap_bn": None,
+            "vol_3m": round(ann_vol(r[-63:]), 4), "momentum_12_1": round(mom, 4),
+            "drawdown_52w": round(float(lv[-1]/peak - 1), 4), "avg_corr": round(ac, 4),
+            "beta_qqq": per_ticker[tk]["beta_qqq"],
+        })
+    def zrank(vals, higher_better):
+        order = sorted(range(len(vals)), key=lambda i: vals[i], reverse=higher_better)
+        z = [0.0]*len(vals)
+        for pos, i in enumerate(order):
+            z[i] = 2*pos/(len(vals)-1) - 1
+        return z
+    cols = {"momentum": ("momentum_12_1", True, 0.40),
+            "volatility": ("vol_3m", False, -0.20),
+            "drawdown": ("drawdown_52w", True, 0.15),
+            "diversification": ("avg_corr", False, 0.25)}
+    for key, (fld, hb, w) in cols.items():
+        zs = zrank([r0[fld] for r0 in rows], hb)
+        for i, r0 in enumerate(rows):
+            r0.setdefault("factor_contributions", {})[key] = round(zs[i]*w, 5)
+    for r0 in rows:
+        r0["composite_score"] = round(sum(r0["factor_contributions"].values()), 5)
+    for i, r0 in enumerate(sorted(rows, key=lambda x: -x["composite_score"])):
+        r0["rank"] = i+1
+        r0["percentile"] = round(1 - i/len(rows), 4)
+    return rows
+
+FUND_ROWS = build_fund_rows()
+print("built fundamentals rows:", len(FUND_ROWS))
+print("  top 3:", [(r0["ticker"], r0["composite_score"]) for r0 in sorted(FUND_ROWS, key=lambda x: x["rank"])[:3]])
+"""),
+    code(r"""
+# --- Cell 8: write dashboard JSON ----------------------------------------
 def perf(series):
     s = np.asarray(series, float)
     r = np.diff(np.log(s))
@@ -827,7 +1041,7 @@ for yr in sorted({d[:4] for d in dates}):
 
 oos_start = next((d for d in dates if d >= "2022-01-03"), dates[0])
 
-DIS_R = "REAL market data. Source: Yahoo Finance EOD via yfinance, adjusted close."
+DIS_R = "REAL market data. Source: Yahoo Finance EOD chart API (yfinance/stooq fallbacks), adjusted close."
 DIS_S = "SYNTHETIC placeholder. Requires a trained model (Phase 6); not research output."
 
 def write(name, obj):
@@ -848,6 +1062,7 @@ write("fundamentals.json", {
     "synthetic": False,
     "disclaimer": "Market-derived factors computed from real prices. Fundamental factors (P/E, growth, FCF, revisions, AI exposure) are NOT YET AVAILABLE - see Phase 1.",
     "method": "Composite over available market-derived factors only, rank-standardised to [-1,1] and renormalised. Fundamental factors pending Phase 1 sourced dataset.",
+    "fundamental_factors_pending": True,
     "factor_defs": [
         {"key": "momentum", "label": "12-1 month momentum", "unit": "ratio", "weight": 0.40},
         {"key": "volatility", "label": "3m realised vol, inverted", "unit": "ratio", "weight": -0.20},
@@ -857,14 +1072,47 @@ write("fundamentals.json", {
     "as_of": dates[-1], "constituents": FUND_ROWS,
 })
 
+def realised_dd(sym, lo, hi):
+    # Realised peak-to-trough drawdown of a benchmark inside a window.
+    s = frames[sym]["adj_close"]
+    s = s[(s.index >= pd.Timestamp(lo)) & (s.index <= pd.Timestamp(hi))]
+    if len(s) < 5:
+        return None
+    return (round(float((s / s.cummax() - 1).min()), 4),
+            s.index.min().date().isoformat(), s.index.max().date().isoformat())
+
+def stress_row(name, sym, lo, hi):
+    dd = realised_dd(sym, lo, hi)
+    if dd is None:
+        return {"name": f"{name} ({sym})", "shock": None,
+                "basis": "insufficient data in window - NOT COMPUTED"}
+    shock, d0, d1 = dd
+    return {"name": f"{name} ({sym} realised)", "shock": shock,
+            "basis": f"Realised peak-to-trough drawdown of {sym}, {d0} -> {d1} (real prices)"}
+
+stress = [
+    stress_row("COVID crash", "QQQ", "2020-02-19", "2020-03-23"),
+    stress_row("2022 rate shock", "QQQ", "2022-01-01", "2022-12-31"),
+    stress_row("2025 semis unwind", "SOXX", "2025-01-01", "2025-12-31"),
+    {"name": "Single-name gap (hypothetical)", "shock": -0.16,
+     "basis": "Hypothetical 2-sigma idiosyncratic gap on the largest position - NOT a realised drawdown"},
+]
+
 write("risk.json", {
     "synthetic": False, "disclaimer": DIS_R,
     "as_of": dates[-1],
+    "portfolio_basis": PORTFOLIO_BASIS,
+    "reference_weights": {t: round(float(WEIGHTS[t]), 6) for t in UNIVERSE},
     "covariance": {
-        "method": "Ledoit-Wolf shrinkage", "window_days": WINDOW,
-        "shrinkage_intensity": 0.0, "condition_number_raw": 0.0,
-        "condition_number_shrunk": 0.0,
-        "note": "Shrinkage estimator is NOT yet fitted - Phase 8. Correlations are raw sample.",
+        "method": "Ledoit-Wolf shrinkage",
+        "window_days": WINDOW,
+        "observations": int(len(Y)),
+        "shrinkage_intensity": round(shrinkage, 4),
+        "condition_number_raw": round(cond_raw, 1),
+        "condition_number_shrunk": round(cond_shrunk, 1),
+        "note": ("Fitted on the trailing complete-case window (observations where "
+                 "all 20 names are simultaneously observed; bounded by CRWV's "
+                 "2025-03 listing). Correlations in this file remain the raw sample."),
     },
     "tickers": UNIVERSE, "correlation": corr, "per_ticker": per_ticker,
     "mctr": mctr, "cctr": cctr,
@@ -879,12 +1127,7 @@ write("risk.json", {
         "herfindahl": round(sum(v*v for v in WEIGHTS.values()), 4),
         "effective_names": round(1/sum(v*v for v in WEIGHTS.values()), 2),
     },
-    "stress": [
-        {"name": "2022 rate shock", "shock": -0.34, "basis": "Nasdaq-100 peak-to-trough, Feb-Jun 2022"},
-        {"name": "AI-capex unwind", "shock": -0.26, "basis": "Feb-Apr 2025 semis-led drawdown"},
-        {"name": "2020 COVID crash", "shock": -0.28, "basis": "19 Feb - 23 Mar 2020"},
-        {"name": "Single-name gap", "shock": -0.16, "basis": "2-sigma idiosyncratic gap on largest position"},
-    ],
+    "stress": stress,
 })
 
 write("backtest.json", {
@@ -913,116 +1156,144 @@ write("backtest.json", {
     },
 })
 """),
-    code(r"""
-# --- Cell 8: fundamentals rows (market-derived, real) ---------------------
-def build_fund_rows():
-    rows = []
-    for tk in UNIVERSE:
-        lv = np.array(levels[tk])
-        r  = np.array(returns[tk][1:])
-        mom = float(lv[-1]/lv[-253] - 1) if len(lv) > 253 else float(lv[-1]/lv[0]-1)
-        peak = float(np.max(lv[-252:]))
-        ac = float(np.mean([corr[idx[tk]][j] for j in range(len(UNIVERSE)) if j != idx[tk]]))
-        rows.append({
-            "ticker": tk, "company": "", "ai_category": "", "sector": "",
-            "ai_revenue_exposure": None, "aicapex_exposure": None,
-            "revenue_growth": None, "fcf_quality": None, "earnings_revisions": None,
-            "fwd_pe": None, "price": round(float(lv[-1]), 2), "market_cap_bn": None,
-            "vol_3m": round(ann_vol(r[-63:]), 4), "momentum_12_1": round(mom, 4),
-            "drawdown_52w": round(float(lv[-1]/peak - 1), 4), "avg_corr": round(ac, 4),
-            "beta_qqq": per_ticker[tk]["beta_qqq"],
-        })
-    def zrank(vals, higher_better):
-        order = sorted(range(len(vals)), key=lambda i: vals[i], reverse=higher_better)
-        z = [0.0]*len(vals)
-        for pos, i in enumerate(order):
-            z[i] = 2*pos/(len(vals)-1) - 1
-        return z
-    cols = {"momentum": ("momentum_12_1", True, 0.40),
-            "volatility": ("vol_3m", False, -0.20),
-            "drawdown": ("drawdown_52w", True, 0.15),
-            "diversification": ("avg_corr", False, 0.25)}
-    for key, (fld, hb, w) in cols.items():
-        zs = zrank([r0[fld] for r0 in rows], hb)
-        for i, r0 in enumerate(rows):
-            r0.setdefault("factor_contributions", {})[key] = round(zs[i]*w, 5)
-    for r0 in rows:
-        r0["composite_score"] = round(sum(r0["factor_contributions"].values()), 5)
-    for i, r0 in enumerate(sorted(rows, key=lambda x: -x["composite_score"])):
-        r0["rank"] = i+1
-        r0["percentile"] = round(1 - i/len(rows), 4)
-    return rows
-
-FUND_ROWS = build_fund_rows()
-print("built fundamentals rows:", len(FUND_ROWS))
-print("  top 3:", [(r0["ticker"], r0["composite_score"]) for r0 in sorted(FUND_ROWS, key=lambda x: x["rank"])[:3]])
-"""),
 ]
 
 
-# The JSON writer references FUND_ROWS, which the fundamentals builder defines,
-# so the builder must run FIRST. Resolve by content - positional indices are
-# wrong here because markdown cells are interleaved between code cells.
-_i_writer = next(
-    i
-    for i, c in enumerate(CELLS)
-    if "".join(c["source"]).startswith("# --- Cell 7: write dashboard JSON")
-)
-_i_fund = next(
-    i for i, c in enumerate(CELLS) if "def build_fund_rows" in "".join(c["source"])
-)
-assert _i_fund == _i_writer + 1, f"unexpected layout: writer={_i_writer} fund={_i_fund}"
-CELLS[_i_fund], CELLS[_i_writer] = CELLS[_i_writer], CELLS[_i_fund]
-print(f"  swapped: fundamentals builder now at index {_i_fund}, writer at {_i_writer}")
+# Cell order is explicit in CELLS: the fundamentals builder (Cell 7) precedes
+# the JSON writer (Cell 8) that consumes FUND_ROWS, so no runtime reordering
+# is needed (v002 removed the previous cell-swap workaround).
 
 CELLS += [
     md(r"""
-## Cell 7 — Emit the dashboard JSON schema + run manifest
+## Cell 9 — Run manifest, provenance ledger, bundle
 
-Emits a machine-readable record of exactly what ran (`WORKTREE.md` §6 step 7), then packages
-the dashboard bundle for download.
+Emits the machine-readable run record (`WORKTREE.md` §6 step 7): sources, per-ticker
+rows, validation, corporate actions, Parquet checksums. Then emits the dashboard
+`manifest.json` carrying the canonical 12-row provenance ledger, and packages the whole
+bundle for download.
 """),
     code(r"""
-# --- Cell 9: manifest + download -----------------------------------------
-manifest = {
+# --- Cell 9: manifests + dashboard bundle ---------------------------------
+EXECUTED_AT = datetime.now(timezone.utc).isoformat()
+
+# Canonical provenance ledger. The surface strings are a SHARED CONTRACT with
+# dashboard/scripts/gen_demo_data.py (it merges on these exact keys); statuses
+# use the REAL / SYNTHETIC / PENDING vocabulary the dashboard parses.
+LEDGER = [
+    {"surface": "AI Universe - constituent identity, AI category, domicile, source URLs",
+     "status": "REAL", "source": "artifacts/manifests/universe_verification_v001.json"},
+    {"surface": "AI Universe - fundamental factors (valuation, growth, FCF, revisions, AI exposure)",
+     "status": "PENDING (Phase 1)", "source": "sourced fundamental dataset not yet produced"},
+    {"surface": "AI Universe - market-derived factors (momentum, volatility, drawdown, correlation)",
+     "status": "REAL", "source": "fundamentals.json - computed from acquired prices"},
+    {"surface": "Stock Intelligence - price history (20 names + QQQ/SOXX/SPY)",
+     "status": "REAL", "source": "Yahoo Finance EOD via yahoo_chart_api (see run_manifest.json)"},
+    {"surface": "Stock Intelligence - correlation, beta, volatility, drawdown",
+     "status": "REAL", "source": "computed from acquired prices"},
+    {"surface": "ML Lab - IC, ICIR, hit rate, folds, feature importance",
+     "status": "SYNTHETIC (fixture)", "source": "dashboard/scripts/gen_demo_data.py - Phase 6/7 pending"},
+    {"surface": "Portfolio - weights, constraints, turnover",
+     "status": "SYNTHETIC (fixture)", "source": "dashboard/scripts/gen_demo_data.py - Phase 9 pending"},
+    {"surface": "Risk - correlation matrix, beta map, volatility",
+     "status": "REAL", "source": "risk.json - statistics on the equal-weight reference book"},
+    {"surface": "Risk - VaR/ES, MCTR/CCTR, covariance diagnostics (equal-weight reference book)",
+     "status": "REAL", "source": "risk.json - Ledoit-Wolf fit on acquired prices"},
+    {"surface": "Backtest - equal-weight universe & benchmark curves, attribution",
+     "status": "REAL", "source": "backtest.json (EW_UNIVERSE, QQQ, SOXX, SPY)"},
+    {"surface": "Backtest - ML portfolio curve, net-of-cost statistics",
+     "status": "SYNTHETIC (placeholder curve)", "source": "backtest.json ML_PORTFOLIO - Phase 6/9/10 pending"},
+    {"surface": "Research Audit - ledger, open issues, decision record",
+     "status": "REAL", "source": "PHASE_LOG.md / QUALITY_GATES.md / AGENTS.md"},
+]
+
+PENDING_REAL_ARTIFACTS = [
+    "universe_verification_v001.json (DELIVERED)",
+    "fundamentals_v001.parquet (Phase 1)",
+    "prices_v001.parquet",
+    "features_v003.parquet (Phase 5)",
+    "predictions_v007.parquet (Phase 6)",
+    "covariance_v002.parquet (Phase 8)",
+    "portfolio_weights_v004.parquet (Phase 9)",
+    "backtest_v005.parquet (Phase 10)",
+]
+
+# dashboard/src/data/manifest.json - replaces the synthetic fixture manifest on
+# the local copy. gen_demo_data.py merges on the canonical surface keys above
+# and never downgrades the real-run metadata recorded here.
+write("manifest.json", {
+    "synthetic": False,
+    "disclaimer": DIS_R,
+    "project": "Nasdaq AI Quant Research System",
+    "spec_version": SPEC_VERSION,
+    "universe_version": UNIVERSE_VERSION,
+    "data_version": DATA_VERSION,
+    "research_window": {"start": START, "end_inclusive": END_INCLUSIVE},
+    "generated_at": EXECUTED_AT,
+    "seed": 20260925,   # fixture generator seed for the surfaces still synthetic
+    "real_vs_synthetic": LEDGER,
+    "pending_real_artifacts": PENDING_REAL_ARTIFACTS,
+    "acquisition": {
+        "notebook": NOTEBOOK_NAME,
+        "executed_at": EXECUTED_AT,
+        "sources": "yahoo_chart_api (primary) + yfinance (fallback) + stooq (PoW disabled)",
+        "validation": report["validation"]["status"],
+        "trading_days": n,
+    },
+})
+
+# run_manifest.json - the audit record of exactly what ran (Drive + bundle).
+run_manifest = {
     "artifact": "run_manifest", "version": DATA_VERSION,
     "spec_version": SPEC_VERSION, "universe_version": UNIVERSE_VERSION,
-    "executed_at": datetime.now(timezone.utc).isoformat(),
+    "notebook": NOTEBOOK_NAME,
+    "executed_at": EXECUTED_AT,
     "window": {"start": START, "end_inclusive": END_INCLUSIVE},
     "price_convention": "adjusted close (split and dividend adjusted)",
     "trading_days": n,
-    "acquisition": report["sources"],
+    "sources": {"primary": "yahoo_chart_api",
+                "fallbacks": ["yfinance", "stooq (PoW disabled)"],
+                "per_ticker": report["sources"]},
     "tickers": report["tickers"],
     "failures": report["failures"],
-    "validation": report["validation"]["status"],
-    "real_surfaces": ["market.json", "risk.json", "backtest.json (EW + benchmarks)",
+    "validation": report["validation"],
+    "corporate_actions": {"events": sum(len(v) for v in ACTIONS.values()),
+                          "per_ticker": {t: len(v) for t, v in ACTIONS.items()}},
+    "ledger": LEDGER,
+    "pending_real_artifacts": PENDING_REAL_ARTIFACTS,
+    "real_surfaces": ["market.json", "risk.json", "manifest.json",
+                      "backtest.json (EW_UNIVERSE + benchmarks)",
                       "fundamentals.json (market-derived factors only)"],
     "synthetic_surfaces": ["ML_PORTFOLIO equity curve", "models.json (not produced here)",
                            "portfolio.json weights (not produced here)",
                            "fundamental factors in fundamentals.json (Phase 1 pending)"],
+    "clean_panel": {"rows": int(len(clean)),
+                    "tradable": int(clean["is_tradable"].sum()),
+                    "valid": int(clean["is_valid"].sum())},
+    "parquet": PARQUET_HASHES,
     "files": {},
 }
-for fn in ["market.json", "risk.json", "backtest.json", "fundamentals.json"]:
+for fn in ["market.json", "risk.json", "backtest.json", "fundamentals.json", "manifest.json"]:
     fp = os.path.join(DASH_PATH, fn)
-    manifest["files"][fn] = hashlib.sha256(open(fp, "rb").read()).hexdigest()
+    run_manifest["files"][fn] = hashlib.sha256(open(fp, "rb").read()).hexdigest()
 
 with open(RUN_PATH, "w") as f:
-    json.dump(manifest, f, indent=2)
-print("manifest ->", RUN_PATH)
-print(json.dumps({k: manifest[k] for k in
-                  ["validation", "trading_days", "real_surfaces", "synthetic_surfaces"]}, indent=2))
+    json.dump(run_manifest, f, indent=2)
+print("run manifest ->", RUN_PATH)
+print(json.dumps({k: run_manifest[k] for k in
+                  ["validation", "trading_days", "clean_panel", "corporate_actions"]}, indent=2)[:1400])
 
 # Bundle for download
 import shutil
 if os.path.exists(LOCAL_DATA):
     shutil.rmtree(LOCAL_DATA)
 os.makedirs(LOCAL_DATA, exist_ok=True)
-for fn in ["market.json", "risk.json", "backtest.json", "fundamentals.json", "universe.json"]:
+for fn in ["market.json", "risk.json", "backtest.json", "fundamentals.json",
+           "manifest.json", "universe.json"]:
     src = os.path.join(DASH_PATH, fn)
     if os.path.exists(src):
         shutil.copy2(src, os.path.join(LOCAL_DATA, fn))
 shutil.copy2(RUN_PATH, os.path.join(LOCAL_DATA, "run_manifest.json"))
-print("\nbundle contents:", os.listdir(LOCAL_DATA))
+print("\nbundle contents:", sorted(os.listdir(LOCAL_DATA)))
 """),
     code(r"""
 # --- Cell 10: download ----------------------------------------------------
@@ -1037,12 +1308,15 @@ files.download(zip_path)
 """),
     code(r"""
 # --- Cell 11: verify the bundle ------------------------------------------
-# Self-check: the schema must match what dashboard/src/lib/data.ts expects.
+# Self-check: schema must match dashboard/src/lib/data.ts expectations, and
+# the provenance contract (ledger shape, VaR signs, reference book) must hold.
 required = {
     "market.json":      ["dates", "levels", "returns", "start_idx", "benchmarks", "realised_vol"],
-    "risk.json":        ["tickers", "correlation", "per_ticker", "portfolio"],
+    "risk.json":        ["tickers", "correlation", "per_ticker", "portfolio",
+                         "portfolio_basis", "reference_weights", "covariance", "stress"],
     "backtest.json":    ["series", "performance", "yearly", "attribution", "series_provenance"],
-    "fundamentals.json":["constituents", "factor_defs"],
+    "fundamentals.json":["constituents", "factor_defs", "fundamental_factors_pending"],
+    "manifest.json":    ["real_vs_synthetic", "acquisition", "data_version", "synthetic"],
 }
 ok = True
 for fn, keys in required.items():
@@ -1058,20 +1332,73 @@ m = json.load(open(os.path.join(LOCAL_DATA, "market.json")))
 print(f"\n  dates           {len(m['dates'])}  {m['dates'][0]} -> {m['dates'][-1]}")
 print(f"  level lengths   {sorted({len(v) for v in m['levels'].values()})}")
 print(f"  benchmarks      {list(m['benchmarks'])}")
+
 r = json.load(open(os.path.join(LOCAL_DATA, "risk.json")))
-print(f"  correlation     {len(r['correlation'])}x{len(r['correlation'][0])}")
+print(f"\n  correlation     {len(r['correlation'])}x{len(r['correlation'][0])}")
+print(f"  basis           {r['portfolio_basis']}   book vol {r['portfolio']['vol_annual']:.3f}")
+print(f"  VaR 95/99       {r['portfolio']['var_95_daily']:.4f} / {r['portfolio']['var_99_daily']:.4f}  (positive = loss)")
+assert r['portfolio']['var_95_daily'] > 0, "VaR must be a positive loss magnitude"
+assert r['portfolio']['var_99_daily'] >= r['portfolio']['var_95_daily'], "VaR99 must be >= VaR95"
+assert r['portfolio']['es_95_daily'] >= r['portfolio']['var_95_daily'], "ES95 must be >= VaR95"
+sh = r['covariance']
+print(f"  LW shrinkage    {sh['shrinkage_intensity']:.4f}  cond {sh['condition_number_raw']:.0f} -> "
+      f"{sh['condition_number_shrunk']:.0f}  obs {sh['observations']}")
+print(f"  stress          {[(s['name'], s['shock']) for s in r['stress']]}")
+
 b = json.load(open(os.path.join(LOCAL_DATA, "backtest.json")))
-print(f"  series          {list(b['series'])}")
+print(f"\n  series          {list(b['series'])}")
+for k in ("ML_PORTFOLIO", "EW_UNIVERSE", "QQQ", "SOXX", "SPY"):
+    assert k in b["series"] and k in b["performance"], f"missing series/performance key {k}"
 print(f"  provenance      {b['series_provenance']}")
+assert b['series_provenance'].get('EW_UNIVERSE') == 'real', "EW curve must be flagged real"
+assert b['series_provenance'].get('ML_PORTFOLIO') == 'synthetic', "ML curve must stay flagged"
+
+f_ = json.load(open(os.path.join(LOCAL_DATA, "fundamentals.json")))
+named = sum(1 for c in f_["constituents"] if c.get("company"))
+print(f"\n  fund rows       {len(f_['constituents'])}  with company name: {named}")
+assert named == len(UNIVERSE), "every constituent row must carry a real company name"
+
+mf = json.load(open(os.path.join(LOCAL_DATA, "manifest.json")))
+lj = mf["real_vs_synthetic"]
+assert len(lj) == 12, f"ledger must have 12 canonical rows, has {len(lj)}"
+print(f"\n  ledger          {len(lj)} canonical rows")
+for row in lj:
+    print(f"    {row['status'][:34]:36s} {row['surface'][:64]}")
+print(f"  acquisition     {mf['acquisition']['notebook']} @ {mf['acquisition']['executed_at']}")
 print("\nBUNDLE VERIFIED" if ok else "\nBUNDLE INVALID")
 """),
 ]
+
+# Inject constituent identity (company / AI category / security class) from the
+# Phase-0 verification artifact so the notebook embeds REAL metadata at build
+# time and never invents company names at runtime.
+_meta_src = json.loads(UNIVERSE_VERIFICATION.read_text())
+_universe_meta = {
+    c["ticker"]: {
+        "company": c["company"],
+        "ai_category": c["ai_category"],
+        "security_class": c["security_class"],
+    }
+    for c in _meta_src["constituents"]
+}
+_meta_literal = json.dumps(_universe_meta, indent=4, sort_keys=True)
+_injected = 0
+for _c in CELLS:
+    _src = "".join(_c["source"])
+    if "__UNIVERSE_META__" in _src:
+        _c["source"] = _src.replace("__UNIVERSE_META__", _meta_literal).splitlines(
+            keepends=True
+        )
+        _injected += 1
+assert _injected == 1, (
+    f"expected exactly one UNIVERSE_META placeholder, found {_injected}"
+)
 
 nb = {
     "cells": CELLS,
     "metadata": {
         "colab": {
-            "name": "nasdaq_ai_quant_acquire_v001.ipynb",
+            "name": "nasdaq_ai_quant_acquire_v002.ipynb",
             "provenance": [],
             "toc_visible": True,
             "kernel": {"name": "python3", "display_name": "Python 3"},

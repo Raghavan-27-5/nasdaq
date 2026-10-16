@@ -26,7 +26,10 @@ Every emitted artifact carries:
     "generator":  "scripts/gen_demo_data.py"
     "seed":       <int>
     "disclaimer": "<text>"
-and manifest.json carries a full real-vs-simulated ledger.
+and manifest.json carries a full real-vs-simulated ledger, merged with any
+real-run ledger already present (real rows and acquisition metadata are never
+downgraded). Files already flagged "synthetic": false (i.e. produced by a
+Colab run) are never overwritten unless --force is passed.
 
 DESIGN RULE: MARKET-DERIVED STATISTICS ARE COMPUTED, NOT INVENTED
 -----------------------------------------------------------------
@@ -40,7 +43,7 @@ heatmap agrees with the equity curves a user can actually see.
 Deterministic: same seed -> byte-identical output. Pure stdlib, no numpy,
 ~1s runtime, negligible memory (satisfies the AGENTS.md local compute boundary).
 
-Usage:  python3 scripts/gen_demo_data.py
+Usage:  python3 scripts/gen_demo_data.py [--force]
 """
 
 from __future__ import annotations
@@ -48,6 +51,7 @@ from __future__ import annotations
 import json
 import math
 import random
+import sys
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -1353,15 +1357,188 @@ def synth_meta() -> dict:
     }
 
 
+# --------------------------------------------------------------------------
+# Canonical provenance ledger.
+#
+# Shared contract with the Colab acquisition notebook
+# (notebooks/colab/nasdaq_ai_quant_acquire_*.ipynb): both sides key ledger
+# rows by these exact surface strings so a fixture manifest and a real-run
+# manifest can be merged without duplicates or lost rows.
+# --------------------------------------------------------------------------
+
+SURFACE_IDENTITY = (
+    "AI Universe - constituent identity, AI category, domicile, source URLs"
+)
+SURFACE_FUNDAMENTAL_FACTORS = (
+    "AI Universe - fundamental factors (valuation, growth, FCF, revisions, AI exposure)"
+)
+SURFACE_MARKET_FACTORS = (
+    "AI Universe - market-derived factors (momentum, volatility, drawdown, correlation)"
+)
+SURFACE_PRICES = "Stock Intelligence - price history (20 names + QQQ/SOXX/SPY)"
+SURFACE_STOCK_METRICS = "Stock Intelligence - correlation, beta, volatility, drawdown"
+SURFACE_MODELS = "ML Lab - IC, ICIR, hit rate, folds, feature importance"
+SURFACE_PORTFOLIO = "Portfolio - weights, constraints, turnover"
+SURFACE_RISK_MATRIX = "Risk - correlation matrix, beta map, volatility"
+SURFACE_RISK_BOOK = (
+    "Risk - VaR/ES, MCTR/CCTR, covariance diagnostics (equal-weight reference book)"
+)
+SURFACE_BACKTEST_EW = "Backtest - equal-weight universe & benchmark curves, attribution"
+SURFACE_BACKTEST_ML = "Backtest - ML portfolio curve, net-of-cost statistics"
+SURFACE_AUDIT = "Research Audit - ledger, open issues, decision record"
+
+LEDGER_ORDER = [
+    SURFACE_IDENTITY,
+    SURFACE_FUNDAMENTAL_FACTORS,
+    SURFACE_MARKET_FACTORS,
+    SURFACE_PRICES,
+    SURFACE_STOCK_METRICS,
+    SURFACE_MODELS,
+    SURFACE_PORTFOLIO,
+    SURFACE_RISK_MATRIX,
+    SURFACE_RISK_BOOK,
+    SURFACE_BACKTEST_EW,
+    SURFACE_BACKTEST_ML,
+    SURFACE_AUDIT,
+]
+
+# Which surfaces each generated file feeds. The generator only rewrites rows
+# for files it actually (re)wrote in this run; real-run rows are preserved.
+FILE_SURFACES: dict[str, list[str]] = {
+    "fundamentals.json": [SURFACE_FUNDAMENTAL_FACTORS, SURFACE_MARKET_FACTORS],
+    "market.json": [SURFACE_PRICES, SURFACE_STOCK_METRICS],
+    "risk.json": [SURFACE_RISK_MATRIX, SURFACE_RISK_BOOK],
+    "backtest.json": [SURFACE_BACKTEST_EW, SURFACE_BACKTEST_ML],
+    "models.json": [SURFACE_MODELS],
+    "portfolio.json": [SURFACE_PORTFOLIO],
+}
+
+PENDING_REAL_ARTIFACTS = [
+    "universe_verification_v001.json (DELIVERED)",
+    "fundamentals_v001.parquet (Phase 1)",
+    "prices_v001.parquet",
+    "features_v003.parquet (Phase 5)",
+    "predictions_v007.parquet (Phase 6)",
+    "covariance_v002.parquet (Phase 8)",
+    "portfolio_weights_v004.parquet (Phase 9)",
+    "backtest_v005.parquet (Phase 10)",
+]
+
+WRITTEN_FILES: set[str] = set()
+FORCE = "--force" in sys.argv[1:]
+
+
+def is_real_artifact(path: Path) -> bool:
+    """True when an existing artifact is flagged non-synthetic (a Colab run)."""
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return False
+    return isinstance(payload, dict) and payload.get("synthetic") is False
+
+
 def write(name: str, payload: dict) -> None:
+    """Write a fixture, never clobbering a real artifact unless --force."""
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     p = OUT_DIR / name
+    if is_real_artifact(p) and not FORCE:
+        print(
+            f"  {name:22s} SKIPPED - real artifact present (pass --force to overwrite)"
+        )
+        return
     p.write_text(json.dumps(payload, separators=(",", ":"), allow_nan=False))
+    WRITTEN_FILES.add(name)
     print(f"  {name:22s} {p.stat().st_size / 1024:8.1f} KB")
+
+
+def build_manifest(real: dict) -> dict:
+    """Assemble manifest.json, merging with any real-run ledger already present."""
+    existing: dict | None = None
+    mp = OUT_DIR / "manifest.json"
+    # --force means "make this tree fully synthetic again": ignore any existing
+    # manifest (including real-run metadata). Without it, merge losslessly.
+    if mp.exists() and not FORCE:
+        try:
+            parsed = json.loads(mp.read_text())
+            if isinstance(parsed, dict):
+                existing = parsed
+        except json.JSONDecodeError:
+            existing = None
+
+    rows: dict[str, dict] = {}
+    if existing:
+        for r in existing.get("real_vs_synthetic", []):
+            if isinstance(r, dict) and isinstance(r.get("surface"), str):
+                rows[r["surface"]] = r
+
+    for name in sorted(WRITTEN_FILES):
+        for surface in FILE_SURFACES.get(name, []):
+            rows[surface] = {
+                "surface": surface,
+                "status": "SYNTHETIC",
+                "source": "dashboard/scripts/gen_demo_data.py (fixture)",
+            }
+
+    defaults = {
+        SURFACE_IDENTITY: (
+            "REAL",
+            "artifacts/manifests/universe_verification_v001.json",
+        ),
+        SURFACE_AUDIT: ("REAL", "PHASE_LOG.md / QUALITY_GATES.md / AGENTS.md"),
+    }
+    for surface in LEDGER_ORDER:
+        if surface not in rows:
+            status, source = defaults.get(
+                surface,
+                (
+                    "SYNTHETIC (fixture - phase pending)",
+                    "dashboard/scripts/gen_demo_data.py",
+                ),
+            )
+            rows[surface] = {"surface": surface, "status": status, "source": source}
+
+    # Canonical rows first, in fixed order. Legacy rows under old surface keys
+    # are dropped unless they are REAL (never lose a real surface, self-heal
+    # stale synthetic duplicates so the ledger stays exactly 12 rows).
+    ledger = [rows[s] for s in LEDGER_ORDER]
+    for s, r in rows.items():
+        if s not in LEDGER_ORDER and str(r.get("status", "")).startswith("REAL"):
+            ledger.append(r)
+
+    manifest: dict = {
+        **synth_meta(),
+        "project": "Nasdaq AI Quant Research System",
+        "spec_version": "0.1.0",
+        "universe_version": real["universe_version"],
+        "research_window": {
+            "start": START.isoformat(),
+            "end_inclusive": END.isoformat(),
+        },
+        "generated_at": "2026-09-25T12:00:00Z",
+        "real_vs_synthetic": ledger,
+        "pending_real_artifacts": PENDING_REAL_ARTIFACTS,
+    }
+    if existing:
+        # Preserve real-run metadata: never downgrade a partially-real build.
+        for k in (
+            "synthetic",
+            "disclaimer",
+            "generated_at",
+            "data_version",
+            "acquisition",
+            "pending_real_artifacts",
+        ):
+            if k in existing:
+                manifest[k] = existing[k]
+    return manifest
 
 
 def main() -> None:
     print("Nasdaq AI Quant - SYNTHETIC demo fixture generator")
+    if FORCE:
+        print(
+            "  --force: existing artifacts (including any REAL ones) are overwritten by fixtures"
+        )
     print(f"  seed={SEED}  window={START} .. {END}")
 
     cal = build_calendar()
@@ -1528,79 +1705,22 @@ def main() -> None:
     write("risk.json", {**synth_meta(), **risk})
     write("backtest.json", {**synth_meta(), **bt})
 
-    write(
-        "manifest.json",
-        {
-            **synth_meta(),
-            "project": "Nasdaq AI Quant Research System",
-            "spec_version": "0.1.0",
-            "universe_version": real["universe_version"],
-            "research_window": {
-                "start": START.isoformat(),
-                "end_inclusive": END.isoformat(),
-            },
-            "generated_at": "2026-09-25T12:00:00Z",
-            "real_vs_synthetic": [
-                {
-                    "surface": "AI Universe - constituent identity, AI category, domicile, source URLs",
-                    "status": "REAL",
-                    "source": "artifacts/manifests/universe_verification_v001.json",
-                },
-                {
-                    "surface": "AI Universe - factor scores, valuation, growth, capex exposure",
-                    "status": "SYNTHETIC",
-                    "source": "gen_demo_data.py",
-                },
-                {
-                    "surface": "Stock Intelligence - price history",
-                    "status": "SYNTHETIC",
-                    "source": "gen_demo_data.py (regime-anchored, not Yahoo quotes)",
-                },
-                {
-                    "surface": "Stock Intelligence - correlation, beta, volatility, drawdown",
-                    "status": "SYNTHETIC (computed from synthetic prices)",
-                    "source": "gen_demo_data.py",
-                },
-                {
-                    "surface": "ML Lab - IC, ICIR, hit rate, folds, SHAP",
-                    "status": "SYNTHETIC",
-                    "source": "gen_demo_data.py",
-                },
-                {
-                    "surface": "Portfolio - weights, constraints, turnover",
-                    "status": "SYNTHETIC",
-                    "source": "gen_demo_data.py",
-                },
-                {
-                    "surface": "Risk - correlation matrix, MCTR/CCTR, VaR/ES, covariance diagnostics",
-                    "status": "SYNTHETIC (matrix computed from synthetic prices)",
-                    "source": "gen_demo_data.py",
-                },
-                {
-                    "surface": "Backtest - equity curves, CAGR/Sharpe/drawdown, factor attribution",
-                    "status": "SYNTHETIC",
-                    "source": "gen_demo_data.py",
-                },
-                {
-                    "surface": "Research Audit - ledger, open issues, decision record",
-                    "status": "REAL",
-                    "source": "PHASE_LOG.md / QUALITY_GATES.md / AGENTS.md",
-                },
-            ],
-            "pending_real_artifacts": [
-                "universe_verification_v001.json (DELIVERED)",
-                "fundamentals_v001.parquet",
-                "prices_v001.parquet",
-                "features_v003.parquet",
-                "predictions_v007.parquet",
-                "covariance_v002.parquet",
-                "portfolio_weights_v004.parquet",
-                "backtest_v005.parquet",
-            ],
-        },
-    )
+    # The manifest is always rewritten (not routed through write()): it merges
+    # with any real-run ledger already present, preserves real-run metadata and
+    # only refreshes rows for files actually written in this run. Writing it
+    # through the synthetic guard would silently drop fixture rows that changed.
+    manifest = build_manifest(real)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    mp = OUT_DIR / "manifest.json"
+    mp.write_text(json.dumps(manifest, separators=(",", ":"), allow_nan=False))
+    print(f"  {'manifest.json':22s} {mp.stat().st_size / 1024:8.1f} KB")
 
-    print("\nDone. All artifacts labelled synthetic.")
+    if manifest.get("synthetic") is False:
+        print(
+            "\nDone. Fixtures refreshed; real-run ledger rows preserved (partial-real build)."
+        )
+    else:
+        print("\nDone. All artifacts labelled synthetic.")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Page, Segmented } from '@/components/ui/Page'
-import { Panel, Eyebrow, Sim } from '@/components/ui/Panel'
+import { Panel, Eyebrow } from '@/components/ui/Panel'
 import { Value, Badge, MiniBar, NotComputed } from '@/components/ui/Value'
 import { EChart } from '@/components/charts/EChart'
 import { Sparkline, drawdownSeries, ContributionBar } from '@/components/charts/primitives'
@@ -16,8 +16,9 @@ import {
   seriesFor,
   historyStart,
 } from '@/lib/data'
+import { fundamentalFactorsPending, fundamentalsStatus, marketIsReal, riskBookIsPlaceholder, riskIsReal } from '@/lib/provenance'
 import { useApp } from '@/lib/store'
-import { nf, pct, pctSigned, ratioSigned, humanise, bn, money } from '@/lib/format'
+import { nf, nfInt, pct, pctSigned, ratioSigned, humanise, bn, money } from '@/lib/format'
 
 type Range = '3m' | '1y' | '3y' | 'all'
 
@@ -97,9 +98,10 @@ export function StockIntelligence() {
   )
 
   const contributions = useMemo(() => {
-    const keys = Object.keys(f.factor_contributions)
+    const fc = f.factor_contributions ?? {}
+    const keys = Object.keys(fc)
     return keys
-      .map((k) => ({ key: k, label: k.replace(/_/g, ' '), v: f.factor_contributions[k] }))
+      .map((k) => ({ key: k, label: k.replace(/_/g, ' '), v: fc[k] }))
       .sort((a, b) => Math.abs(b.v) - Math.abs(a.v))
   }, [f])
 
@@ -204,6 +206,7 @@ export function StockIntelligence() {
                 ? `Rebased to 1.00 at ${dates[0]} · growth of 100 in the tooltip`
                 : 'Drawdown from running peak'
             }
+            provenance={marketIsReal ? 'real' : 'synthetic'}
             actions={
               <Segmented
                 value={cmp}
@@ -229,7 +232,11 @@ export function StockIntelligence() {
             </div>
           </Panel>
 
-          <Panel title="Period statistics" subtitle={`Trailing ${range.toUpperCase()} · synthetic`}>
+          <Panel
+            title="Period statistics"
+            subtitle={`Trailing ${range.toUpperCase()} · ${marketIsReal ? 'computed from real adjusted prices' : 'synthetic prices'}`}
+            provenance={marketIsReal ? 'real' : 'synthetic'}
+          >
             {!perf ? (
               <NotComputed reason="Insufficient price history in the selected window." />
             ) : (
@@ -259,7 +266,11 @@ export function StockIntelligence() {
 
         {/* Factor + risk + valuation */}
         <div className="grid gap-3 lg:grid-cols-3">
-          <Panel title="Factor contributions" subtitle="Weighted z-score · drives composite rank">
+          <Panel
+            title="Factor contributions"
+            subtitle="Weighted z-score · drives composite rank"
+            provenance={fundamentalFactorsPending ? 'mixed' : 'real'}
+          >
             <div className="space-y-1.5">
               {contributions.map((c) => (
                 <div key={c.key}>
@@ -283,7 +294,7 @@ export function StockIntelligence() {
               <span className="text-micro text-fg-dim">Composite</span>
               <Value tone={f.composite_score >= 0 ? 'pos' : 'neg'} size="lg">
                 {f.composite_score >= 0 ? '+' : ''}
-                {f.composite_score.toFixed(3)}
+                {nf(f.composite_score, 3)}
               </Value>
             </div>
             <div className="mt-0.5 flex items-baseline justify-between">
@@ -294,41 +305,80 @@ export function StockIntelligence() {
             </div>
           </Panel>
 
-          <Panel title="Fundamental snapshot" subtitle="Current-state, descriptive only" actions={<Sim />}>
+          <Panel
+            title="Fundamental snapshot"
+            subtitle="Current-state, descriptive only"
+            provenance={fundamentalsStatus}
+          >
             <div className="space-y-2">
               {(
                 [
-                  ['Price', money(f.price), false],
-                  ['Market cap', bn(f.market_cap_bn), false],
-                  ['Forward P/E', `${nf(f.fwd_pe, 1)}x`, false],
-                  ['Revenue growth', pctSigned(f.revenue_growth * 100, 1), f.revenue_growth >= 0],
-                  ['FCF quality', nf(f.fcf_quality, 2), false],
-                  ['EPS revision 3m', `${f.earnings_revisions >= 0 ? '+' : ''}${nf(f.earnings_revisions, 2)}`, f.earnings_revisions >= 0],
-                  ['AI revenue exposure', pct(f.ai_revenue_exposure, 0), false],
-                  ['AI capex exposure', pct(f.aicapex_exposure, 0), false],
+                  ['Price', money(f.price), 'flat'],
+                  ['Market cap', bn(f.market_cap_bn), 'flat'],
+                  ['Forward P/E', f.fwd_pe === null || f.fwd_pe === undefined ? '—' : `${nf(f.fwd_pe, 1)}x`, 'flat'],
+                  [
+                    'Revenue growth',
+                    f.revenue_growth === null || f.revenue_growth === undefined
+                      ? '—'
+                      : pctSigned(f.revenue_growth * 100, 1),
+                    f.revenue_growth === null || f.revenue_growth === undefined
+                      ? 'flat'
+                      : f.revenue_growth >= 0
+                        ? 'pos'
+                        : 'neg',
+                  ],
+                  ['FCF quality', nf(f.fcf_quality, 2), 'flat'],
+                  [
+                    'EPS revision 3m',
+                    f.earnings_revisions === null || f.earnings_revisions === undefined
+                      ? '—'
+                      : `${f.earnings_revisions >= 0 ? '+' : ''}${nf(f.earnings_revisions, 2)}`,
+                    f.earnings_revisions === null || f.earnings_revisions === undefined
+                      ? 'flat'
+                      : f.earnings_revisions >= 0
+                        ? 'pos'
+                        : 'neg',
+                  ],
+                  ['AI revenue exposure', pct(f.ai_revenue_exposure, 0), 'flat'],
+                  ['AI capex exposure', pct(f.aicapex_exposure, 0), 'flat'],
                 ] as const
-              ).map(([k, v, signed]) => (
+              ).map(([k, v, tone]) => (
                 <div key={k} className="flex items-baseline justify-between gap-3">
                   <span className="text-micro text-fg-dim">{k}</span>
                   <span
-                    className={
-                      signed
-                        ? `font-mono tnum text-micro ${String(v).startsWith('+') ? 'text-sig-pos' : 'text-sig-neg'}`
-                        : 'font-mono tnum text-micro text-fg-hi'
-                    }
+                    className={`font-mono tnum text-micro ${
+                      tone === 'pos' ? 'text-sig-pos' : tone === 'neg' ? 'text-sig-neg' : 'text-fg-hi'
+                    }`}
                   >
                     {v}
                   </span>
                 </div>
               ))}
             </div>
-            <p className="mt-3 border-t border-ink-700 pt-2 text-2xs leading-relaxed text-fg-mute">
-              Not eligible as a historical model feature — point-in-time reconstruction is open
-              (OI-0001).
-            </p>
+            {fundamentalFactorsPending ? (
+              <p className="mt-3 border-t border-ink-700 pt-2 text-2xs leading-relaxed text-fg-mute">
+                Valuation, growth, FCF and revision fields require the Phase-1 sourced dataset —
+                shown as an em dash until then.
+              </p>
+            ) : (
+              <p className="mt-3 border-t border-ink-700 pt-2 text-2xs leading-relaxed text-fg-mute">
+                Not eligible as a historical model feature — point-in-time reconstruction is open
+                (OI-0001).
+              </p>
+            )}
           </Panel>
 
-          <Panel title="Risk profile" subtitle="Trailing 756 trading days" actions={<Sim />}>
+          <Panel
+            title="Risk profile"
+            subtitle={
+              riskIsReal
+                ? riskBookIsPlaceholder
+                  ? 'Real prices · contributions to the equal-weight book'
+                  : 'Computed from real prices'
+                : 'Trailing 756 trading days'
+            }
+            provenance={riskIsReal ? 'real' : 'synthetic'}
+          >
             <div className="space-y-2">
               {(
                 [
@@ -424,8 +474,6 @@ export function StockIntelligence() {
     </Page>
   )
 }
-
-const nfInt = (v: number) => v.toLocaleString('en-US')
 
 function LegendItem({ color, label, dashed }: { color: string; label: string; dashed?: boolean }) {
   return (

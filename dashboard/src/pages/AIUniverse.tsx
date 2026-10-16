@@ -17,12 +17,17 @@ import {
 } from '@/lib/data'
 import type { FundamentalRow } from '@/lib/data'
 import { useApp } from '@/lib/store'
+import { fundamentalFactorsPending } from '@/lib/provenance'
 import { nf, pct, pctSigned, humanise, bn } from '@/lib/format'
 
 type SortKey =
   | 'rank' | 'ticker' | 'composite_score' | 'ai_revenue_exposure' | 'revenue_growth'
   | 'fcf_quality' | 'fwd_pe' | 'aicapex_exposure' | 'earnings_revisions'
   | 'momentum_12_1' | 'vol_3m' | 'drawdown_52w' | 'avg_corr' | 'market_cap_bn'
+
+/** x-value for the score-vs-factor scatter. Phase-1 fields may be null in early builds. */
+const scatterXValue = (f: FundamentalRow, view: 'pe' | 'growth' | 'mcap'): number | null =>
+  view === 'pe' ? f.fwd_pe : view === 'growth' ? f.revenue_growth : f.market_cap_bn
 
 const CAT_COLOR: Record<string, string> = {
   AI_COMPUTE: C.pos,
@@ -91,6 +96,15 @@ export function AIUniverse() {
     </th>
   )
 
+  const scatterRows = useMemo(
+    () =>
+      rows.filter((f) => {
+        const v = scatterXValue(f, scatter)
+        return v !== null && v !== undefined && Number.isFinite(v)
+      }),
+    [rows, scatter],
+  )
+
   const scatterOption = useMemo(() => {
     const xKey = scatter === 'pe' ? 'fwd_pe' : scatter === 'growth' ? 'revenue_growth' : 'market_cap_bn'
     return {
@@ -108,9 +122,13 @@ export function AIUniverse() {
           const d = (p as { data: { name: string; value: number[] }[] }).data?.[0]
           if (!d) return ''
           const t = String(d.name)
+          const cap =
+            d.value[2] === null || d.value[2] === undefined
+              ? 'market cap pending'
+              : `$${nf(d.value[2], 0)}B`
           return `<div style="font-weight:600;color:${C.hi}">${t}</div>
             <div style="color:${C.dim};margin-top:3px">${humanise(TICKER_META[t].ai_category)}</div>
-            <div style="margin-top:3px">${nf(d.value[0], 1)} · score ${nf(d.value[1], 2)} · $${nf(d.value[2], 0)}B</div>`
+            <div style="margin-top:3px">${nf(d.value[0], 1)} · score ${nf(d.value[1], 2)} · ${cap}</div>`
         },
       },
       xAxis: {
@@ -145,7 +163,7 @@ export function AIUniverse() {
       series: [
         {
           type: 'scatter' as const,
-          data: rows.map((f) => ({
+          data: scatterRows.map((f) => ({
             name: f.ticker,
             value: [
               f[xKey as keyof FundamentalRow] as number,
@@ -175,7 +193,7 @@ export function AIUniverse() {
       ],
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, scatter])
+  }, [scatterRows, scatter])
 
   const catCounts = useMemo(() => {
     const m = new Map<string, number>()
@@ -188,11 +206,19 @@ export function AIUniverse() {
 
   const stats = useMemo(() => {
     const cs = fundamentals.constituents
+    const nums = (pick: (f: FundamentalRow) => number | null | undefined): number[] =>
+      cs
+        .map(pick)
+        .filter((v): v is number => v !== null && v !== undefined && Number.isFinite(v))
+    const median = (xs: number[]): number | null =>
+      xs.length === 0 ? null : [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]
+    const mean = (xs: number[]): number | null =>
+      xs.length === 0 ? null : xs.reduce((s, v) => s + v, 0) / xs.length
     return {
-      medCap: [...cs].sort((a, b) => a.market_cap_bn - b.market_cap_bn)[Math.floor(cs.length / 2)].market_cap_bn,
-      medPe: [...cs].sort((a, b) => a.fwd_pe - b.fwd_pe)[Math.floor(cs.length / 2)].fwd_pe,
-      aiAvg: cs.reduce((s, f) => s + f.ai_revenue_exposure, 0) / cs.length,
-      capexAvg: cs.reduce((s, f) => s + f.aicapex_exposure, 0) / cs.length,
+      medCap: median(nums((f) => f.market_cap_bn)),
+      medPe: median(nums((f) => f.fwd_pe)),
+      aiAvg: mean(nums((f) => f.ai_revenue_exposure)),
+      capexAvg: mean(nums((f) => f.aicapex_exposure)),
     }
   }, [])
 
@@ -202,8 +228,11 @@ export function AIUniverse() {
       lede={
         <>
           Stage-A structural screen (Nasdaq listing, US domicile, material AI exposure, disclosure
-          and liquidity) followed by Stage-B quantitative ranking across ten documented factors. No
-          subjective adjustment is applied to the composite.
+          and liquidity) followed by Stage-B quantitative ranking across{' '}
+          {fundamentalFactorsPending
+            ? `the ${fundamentals.factor_defs.length} market-derived factors available in this build (fundamental factors pending Phase 1)`
+            : 'ten documented factors'}
+          . No subjective adjustment is applied to the composite.
         </>
       }
       toolbar={
@@ -222,7 +251,11 @@ export function AIUniverse() {
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <StatTileInPanel label="Constituents" value={TICKERS.length} sub="locked" />
           <StatTileInPanel label="Median market cap" value={bn(stats.medCap)} />
-          <StatTileInPanel label="Median fwd P/E" value={nf(stats.medPe, 1)} sub="x" />
+          <StatTileInPanel
+            label="Median fwd P/E"
+            value={nf(stats.medPe, 1)}
+            sub={stats.medPe === null ? undefined : 'x'}
+          />
           <StatTileInPanel label="Mean AI exposure" value={pct(stats.aiAvg, 0)} />
           <StatTileInPanel label="Mean capex exposure" value={pct(stats.capexAvg, 0)} />
         </div>
@@ -231,7 +264,20 @@ export function AIUniverse() {
           <Panel
             title="Factor matrix"
             subtitle="Click any row to drill into Stock Intelligence · click a header to sort"
-            actions={<Badge tone="warn">scores synthetic</Badge>}
+            actions={
+              fundamentalFactorsPending ? (
+                <Badge
+                  tone="warn"
+                  title="Market-derived factors are computed from real prices; valuation, growth, FCF and revision factors arrive with the Phase-1 sourced dataset."
+                >
+                  market-derived factors
+                </Badge>
+              ) : fundamentals.synthetic ? (
+                <Badge tone="warn">scores synthetic</Badge>
+              ) : (
+                <Badge tone="pos">real</Badge>
+              )
+            }
             pad={false}
           >
             <div className="max-h-[560px] overflow-auto">
@@ -288,18 +334,26 @@ export function AIUniverse() {
                       <td className="num">
                         <span className={f.composite_score >= 0 ? 'text-sig-pos' : 'text-sig-neg'}>
                           {f.composite_score >= 0 ? '+' : ''}
-                          {f.composite_score.toFixed(3)}
+                          {nf(f.composite_score, 3)}
                         </span>
                       </td>
                       <td className="num">{pct(f.ai_revenue_exposure, 0)}</td>
                       <td className="num">
-                        <Delta>{pctSigned(f.revenue_growth * 100, 1)}</Delta>
+                        <Delta>
+                          {f.revenue_growth === null || f.revenue_growth === undefined
+                            ? '—'
+                            : pctSigned(f.revenue_growth * 100, 1)}
+                        </Delta>
                       </td>
                       <td className="num">{nf(f.fcf_quality, 2)}</td>
                       <td className="num text-fg-dim">{nf(f.fwd_pe, 1)}</td>
                       <td className="num">{pct(f.aicapex_exposure, 0)}</td>
                       <td className="num">
-                        <Delta>{f.earnings_revisions >= 0 ? '+' : ''}{nf(f.earnings_revisions, 2)}</Delta>
+                        <Delta>
+                          {f.earnings_revisions === null || f.earnings_revisions === undefined
+                            ? '—'
+                            : `${f.earnings_revisions >= 0 ? '+' : ''}${nf(f.earnings_revisions, 2)}`}
+                        </Delta>
                       </td>
                       <td className="num">
                         <Delta>{pctSigned(f.momentum_12_1 * 100, 1)}</Delta>
@@ -316,7 +370,25 @@ export function AIUniverse() {
 
           <div className="flex flex-col gap-3">
             <Panel title="Score vs factor" subtitle="Bubble area = market cap · colour = AI category" className="flex-1">
-              <EChart option={scatterOption} height={252} />
+              {scatterRows.length === 0 ? (
+                <p className="py-10 text-center text-2xs leading-relaxed text-fg-mute">
+                  {scatter === 'pe'
+                    ? 'Forward P/E arrives with the Phase-1 sourced fundamentals — no values in this build.'
+                    : scatter === 'growth'
+                      ? 'Revenue growth arrives with the Phase-1 sourced fundamentals — no values in this build.'
+                      : 'Market cap arrives with the Phase-1 sourced fundamentals — no values in this build.'}
+                </p>
+              ) : (
+                <>
+                  <EChart option={scatterOption} height={252} />
+                  {scatterRows.length < rows.length && (
+                    <p className="mt-2 border-t border-ink-700 pt-2 text-2xs leading-relaxed text-fg-mute">
+                      {rows.length - scatterRows.length} of {rows.length} names pending Phase-1
+                      fundamentals — not plotted.
+                    </p>
+                  )}
+                </>
+              )}
             </Panel>
 
             <Panel title="Value-chain coverage" subtitle="Constituents per AI layer">

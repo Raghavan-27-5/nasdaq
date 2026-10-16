@@ -4,18 +4,29 @@ import { Page, Segmented } from '@/components/ui/Page'
 import { Panel } from '@/components/ui/Panel'
 import { Badge } from '@/components/ui/Value'
 import {
+  backtest,
   manifest,
-  universe,
+  market,
   models,
   portfolio,
+  universe,
   TICKERS,
   TRUNCATED,
   historyStart,
   RESEARCH_START,
   RESEARCH_END,
 } from '@/lib/data'
+import {
+  dataMode,
+  ledgerStatus,
+  modelsAreSynthetic,
+  pendingSurfaces,
+  realSurfaces,
+  riskIsReal,
+  syntheticSurfaces,
+} from '@/lib/provenance'
 import { useApp } from '@/lib/store'
-import { humanise, fmtDate } from '@/lib/format'
+import { humanise, fmtDate, nfInt } from '@/lib/format'
 
 // Decision ledger and open issues transcribed from PHASE_LOG.md. These are
 // REAL project records, not fixtures.
@@ -33,6 +44,16 @@ const DECISIONS = [
   ['D0011', '2026-09-25', '0', 'DDOG redomiciled Delaware → Nevada, April 2026', 'SEC filing / investor relations', 'NOTED'],
   ['D0012', '2026-09-25', '0', 'AVGO redomiciled Singapore → Delaware, April 2018', 'Certificate of Incorporation', 'NOTED'],
   ['D0013', '2026-09-25', '0', 'PLTR transferred NYSE → Nasdaq, November 2022', 'Nasdaq official page', 'NOTED'],
+  ['D0014', '2026-10-10', '11', 'Dashboard built as React/Vite/TS SPA rather than Streamlit + Plotly', 'CONTEXT.md permits documented deviation; terminal visual quality', 'LOCKED'],
+  ['D0015', '2026-10-10', '11', 'Dashboard renders synthetic fixtures until Phase 3–10 artifacts land', 'gen_demo_data.py seed 20260925; every artifact flagged synthetic: true', 'NOTED'],
+  ['D0016', '2026-10-10', '11', 'Synthetic market data is internally consistent by construction, not hand-authored', 'Correlations/betas/vol/drawdowns computed from generated series', 'NOTED'],
+  ['D0017', '2026-10-16', '3', 'Acquisition notebook corrected as v002 (VaR/ES fix, real Ledoit-Wolf, realised stress, corporate actions)', 'build_notebook.py; offline dry run 103/103 checks green', 'LOCKED'],
+  ['D0018', '2026-10-16', '11', 'Dashboard provenance is fully artifact-driven — no hardcoded synthetic badges', 'lib/provenance.ts; ledger REAL/SYNTHETIC/PENDING vocabulary', 'LOCKED'],
+  ['D0019', '2026-10-16', '3/11', 'Canonical 12-row provenance ledger is a shared contract: notebook ⇄ gen_demo_data.py', 'identical surface keys/order; dry-run parity check', 'LOCKED'],
+  ['D0020', '2026-10-16', '11', 'gen_demo_data.py never overwrites synthetic:false artifacts; --force = full fixture reset', 'real-artifact guard + manifest merge; partial-real tree tested', 'LOCKED'],
+  ['D0021', '2026-10-16', '3/11', 'Pre-Phase-9 risk stats describe the equal-weight reference book, not a fitted portfolio', 'portfolio_basis: equal_weight_placeholder + reference_weights', 'NOTED'],
+  ['D0022', '2026-10-16', '3', 'Stooq proof-of-work solver disabled; Yahoo remains the designated source', 'ALLOW_STOOQ_POW=False in acquisition notebook', 'LOCKED'],
+  ['D0023', '2026-10-16', '3', 'Offline dry-run harness is the pre-flight gate for any live Colab acquisition run', 'dry_run_notebook.py — executes all cells, audits bundle contract', 'LOCKED'],
 ] as const
 
 const OPEN_ISSUES = [
@@ -48,25 +69,75 @@ const OPEN_ISSUES = [
     'The 12% single-name and category limits are research defaults, not final locks.'],
 ] as const
 
-const GATES = [
+const GATES_STATIC = [
   ['0A', 'Agent operating system', 'PASS', 'Context, compute boundary, source hierarchy and bias rules are explicit.'],
   ['0', 'Universe lock', 'PASS', '20 tickers, all exchange-verified, schema validation 131/131.'],
   ['1', 'Fundamental dataset', 'NOT RUN', 'Phase 1 has not produced a sourced factor dataset.'],
-  ['2', 'Raw EOD data', 'NOT RUN', 'No market dataset has been acquired yet.'],
-  ['3', 'Data quality', 'NOT RUN', 'Depends on Gate 2.'],
   ['4', 'Feature / target integrity', 'NOT RUN', 'Leakage test suite not yet executed.'],
-  ['5', 'Walk-forward ML', 'NOT RUN', 'Models not trained in Colab.'],
   ['6', 'Signal validation', 'NOT RUN', 'Depends on Gates 4–5.'],
-  ['7', 'Risk / optimisation', 'NOT RUN', 'No covariance or optimisation run exists.'],
-  ['8', 'Backtest / attribution', 'NOT RUN', 'No real backtest exists.'],
-  ['9', 'Dashboard', 'IN REVIEW', 'Frontend complete; consumes synthetic fixtures, not real artifacts.'],
 ] as const
 
 export function ResearchAudit() {
   const { selectTicker } = useApp()
   const [tab, setTab] = useState<'provenance' | 'universe' | 'ledger' | 'gates' | 'limits'>('provenance')
 
-  const realCount = manifest.real_vs_synthetic.filter((r) => r.status === 'REAL').length
+  const realCount = realSurfaces.length
+  const syntheticCount = syntheticSurfaces.length
+  const pendingCount = pendingSurfaces.length
+  const acq = manifest.acquisition
+  const backtestReal = backtest.series_provenance !== undefined
+
+  const gates: readonly (readonly [string, string, string, string])[] = [
+    GATES_STATIC[0],
+    GATES_STATIC[1],
+    GATES_STATIC[2],
+    [
+      '2',
+      'Raw EOD data',
+      acq ? 'PASS' : 'NOT RUN',
+      acq
+        ? `Acquired ${acq.trading_days.toLocaleString('en-US')} trading days via ${acq.notebook} (${acq.sources}).`
+        : 'No market dataset has been acquired yet.',
+    ],
+    [
+      '3',
+      'Data quality',
+      acq ? (acq.validation === 'PASS' ? 'PASS' : 'REVIEW') : 'NOT RUN',
+      acq
+        ? `Validation ${acq.validation}: schema, duplicates, missingness, OHLC consistency and listing-start checks in the acquisition notebook.`
+        : 'Depends on Gate 2.',
+    ],
+    GATES_STATIC[3],
+    [
+      '5',
+      'Walk-forward ML',
+      modelsAreSynthetic ? 'NOT RUN' : 'REVIEW',
+      modelsAreSynthetic ? 'Models not trained in Colab.' : 'Model artifact present — awaiting protocol review.',
+    ],
+    GATES_STATIC[4],
+    [
+      '7',
+      'Risk / optimisation',
+      riskIsReal ? 'REVIEW' : 'NOT RUN',
+      riskIsReal
+        ? 'Covariance estimated and shrunk from real prices; contributions describe the equal-weight reference book until Phase 9.'
+        : 'No covariance or optimisation run exists.',
+    ],
+    [
+      '8',
+      'Backtest / attribution',
+      backtestReal ? 'REVIEW' : 'NOT RUN',
+      backtestReal
+        ? 'Equal-weight universe and benchmark curves computed from real prices; ML strategy curve pending Phases 6/9/10.'
+        : 'No real backtest exists.',
+    ],
+    [
+      '9',
+      'Dashboard',
+      dataMode.label === 'live data' ? 'PASS' : 'IN REVIEW',
+      `Frontend renders versioned artifacts with artifact-level provenance — ${realCount} of ${manifest.real_vs_synthetic.length} surfaces real.`,
+    ],
+  ]
 
   return (
     <Page
@@ -75,7 +146,8 @@ export function ResearchAudit() {
         <>
           This page exists so that any claim made anywhere else in the terminal can be traced to a
           named source, a version, and an explicit statement of whether it is real or simulated.
-          Nothing on this page is derived from the synthetic fixture generator.
+          Every surface carries an artifact-level status; nothing is claimed real unless it traces
+          to a versioned run.
         </>
       }
       toolbar={
@@ -94,34 +166,68 @@ export function ResearchAudit() {
     >
       <div className="space-y-3">
         {/* Banner */}
-        <div className="flex items-start gap-3 rounded border border-sig-warn/30 bg-sig-warn/[0.06] px-4 py-3">
-          <span className="mt-[3px] shrink-0 text-sig-warn">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
-              <path d="M8 1.6 15 14H1z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-              <path d="M8 6v3.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-              <circle cx="8" cy="11.6" r="0.85" fill="currentColor" />
-            </svg>
-          </span>
-          <div className="min-w-0">
-            <div className="text-[12.5px] font-semibold text-sig-warn">
-              This build displays synthetic demo data, not research output.
+        {dataMode.label === 'live data' ? (
+          <div className="flex items-start gap-3 rounded border border-sig-pos/30 bg-sig-pos/[0.06] px-4 py-3">
+            <span className="mt-[3px] shrink-0 font-mono text-[13px] text-sig-pos" aria-hidden>
+              ✓
+            </span>
+            <div className="min-w-0">
+              <div className="text-[12.5px] font-semibold text-sig-pos">
+                All rendered surfaces trace to real versioned artifacts.
+              </div>
+              <p className="mt-1 max-w-[140ch] text-micro leading-relaxed text-fg-base">
+                Every table in this terminal is read from a versioned artifact with a recorded
+                acquisition timestamp and checksum.
+              </p>
             </div>
-            <p className="mt-1 max-w-[140ch] text-micro leading-relaxed text-fg-base">
-              The frontend was completed ahead of the Colab compute plane. Only the universe
-              verification artifact is real; every price, model statistic, portfolio weight and
-              backtest figure is produced by{' '}
-              <code className="font-mono text-fg-hi">dashboard/scripts/gen_demo_data.py</code> with
-              seed {manifest.seed}. When the real versioned artifacts land on Drive, the
-              dashboard swaps to them without any change to how a number is computed or displayed.
-            </p>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-start gap-3 rounded border border-sig-warn/30 bg-sig-warn/[0.06] px-4 py-3">
+            <span className="mt-[3px] shrink-0 text-sig-warn">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                <path d="M8 1.6 15 14H1z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+                <path d="M8 6v3.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                <circle cx="8" cy="11.6" r="0.85" fill="currentColor" />
+              </svg>
+            </span>
+            <div className="min-w-0">
+              <div className="text-[12.5px] font-semibold text-sig-warn">
+                {realCount > 2
+                  ? `Partial-real build — ${realCount} of ${manifest.real_vs_synthetic.length} surfaces real, ${syntheticCount} synthetic, ${pendingCount} pending.`
+                  : 'This build displays synthetic demo data, not research output.'}
+              </div>
+              {realCount > 2 ? (
+                <p className="mt-1 max-w-[140ch] text-micro leading-relaxed text-fg-base">
+                  Market prices, market-derived risk statistics and the equal-weight / benchmark
+                  backtest curves come from a real acquisition run
+                  {acq ? ` (${acq.notebook}, ${fmtDate(acq.executed_at.slice(0, 10))})` : ''}.
+                  Surfaces flagged <code className="font-mono text-fg-hi">SYNTHETIC</code> are
+                  fixtures generated by{' '}
+                  <code className="font-mono text-fg-hi">dashboard/scripts/gen_demo_data.py</code>
+                  {syntheticCount > 0 ? ` with seed ${manifest.seed}` : ''}; surfaces flagged{' '}
+                  <code className="font-mono text-fg-hi">PENDING</code> have no artifact yet. The
+                  ledger below is the full accounting.
+                </p>
+              ) : (
+                <p className="mt-1 max-w-[140ch] text-micro leading-relaxed text-fg-base">
+                  The frontend was completed ahead of the Colab compute plane. Only the universe
+                  verification artifact is real; every price, model statistic, portfolio weight and
+                  backtest figure is produced by{' '}
+                  <code className="font-mono text-fg-hi">dashboard/scripts/gen_demo_data.py</code>{' '}
+                  with seed {manifest.seed}. When the real versioned artifacts land on Drive, the
+                  dashboard swaps to them without any change to how a number is computed or
+                  displayed.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {tab === 'provenance' && (
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
             <Panel
               title="Real vs synthetic ledger"
-              subtitle={`${realCount} real surfaces · ${manifest.real_vs_synthetic.length - realCount} synthetic`}
+              subtitle={`${realCount} real · ${syntheticCount} synthetic${pendingCount ? ` · ${pendingCount} pending` : ''}`}
               pad={false}
             >
               <table className="tbl">
@@ -133,19 +239,20 @@ export function ResearchAudit() {
                   </tr>
                 </thead>
                 <tbody>
-                  {manifest.real_vs_synthetic.map((r) => (
-                    <tr key={r.surface}>
-                      <td className="whitespace-normal text-fg-base">{r.surface}</td>
-                      <td>
-                        <Badge tone={r.status === 'REAL' ? 'pos' : r.status.startsWith('SYNTHETIC (') ? 'info' : 'warn'}>
-                          {r.status === 'REAL' ? 'real' : 'synthetic'}
-                        </Badge>
-                      </td>
-                      <td className="whitespace-normal font-mono text-2xs text-fg-mute">
-                        {r.source}
-                      </td>
-                    </tr>
-                  ))}
+                  {manifest.real_vs_synthetic.map((r) => {
+                    const st = ledgerStatus(r.status)
+                    return (
+                      <tr key={r.surface}>
+                        <td className="whitespace-normal text-fg-base">{r.surface}</td>
+                        <td>
+                          <Badge tone={st.tone}>{st.label}</Badge>
+                        </td>
+                        <td className="whitespace-normal font-mono text-2xs text-fg-mute">
+                          {r.source}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </Panel>
@@ -202,9 +309,9 @@ export function ResearchAudit() {
                     [
                       ['Window start', RESEARCH_START],
                       ['Cutoff (EOD)', RESEARCH_END],
-                      ['Trading days', '1,695'],
+                      ['Trading days', nfInt(market.dates.length)],
                       ['Constituents', String(TICKERS.length)],
-                      ['Benchmarks', 'QQQ · SOXX · SPY'],
+                      ['Benchmarks', Object.keys(market.benchmarks).join(' · ')],
                     ] as const
                   ).map(([k, v]) => (
                     <div key={k} className="flex items-baseline justify-between gap-3">
@@ -375,14 +482,18 @@ export function ResearchAudit() {
                 </tr>
               </thead>
               <tbody>
-                {GATES.map(([id, scope, status, notes]) => (
+                {gates.map(([id, scope, status, notes]) => (
                   <tr key={id}>
                     <td className="font-mono text-2xs text-fg-dim">{id}</td>
                     <td className="text-fg-base">{scope}</td>
                     <td className="text-center">
                       <Badge
                         tone={
-                          status === 'PASS' ? 'pos' : status === 'IN REVIEW' ? 'info' : 'neutral'
+                          status === 'PASS'
+                            ? 'pos'
+                            : status === 'IN REVIEW' || status === 'REVIEW'
+                              ? 'info'
+                              : 'neutral'
                         }
                       >
                         {status}
@@ -428,15 +539,25 @@ export function ResearchAudit() {
             </Panel>
 
             <div className="flex flex-col gap-3">
-              <Panel title="Research conclusion" subtitle="Required by the protocol — outcomes must be distinguished">
+              <Panel
+                title="Research conclusion"
+                subtitle="Required by the protocol — outcomes must be distinguished"
+                provenance={modelsAreSynthetic ? 'pending' : 'mixed'}
+              >
                 <div className="space-y-2">
-                  {(
-                    [
-                      ['Predictive but not profitable', 'NOT ESTABLISHED', 'ICIR is positive but small; no net-of-cost edge survives.'],
-                      ['Profitable but factor-driven', 'LIKELY', 'R² 0.70 against QQQ + SOXX; residual alpha is not significant.'],
-                      ['Profitable but capacity-limited', 'NOT TESTED', 'Capacity analysis not run.'],
-                      ['Statistically significant but economically trivial', 'APPLIES', 'Alpha t-stat 0.57 — indistinguishable from zero.'],
-                    ] as const
+                  {(modelsAreSynthetic
+                    ? ([
+                        ['Predictive but not profitable', 'PENDING', 'Requires Phase 6/7 model outputs — no trained model exists yet.'],
+                        ['Profitable but factor-driven', 'PENDING', 'Requires the Phase 10 ML strategy backtest, not the placeholder curve.'],
+                        ['Profitable but capacity-limited', 'NOT TESTED', 'Capacity analysis not run.'],
+                        ['Statistically significant but economically trivial', 'PENDING', 'Requires trained-model OOS statistics and factor-controlled alpha.'],
+                      ] as const)
+                    : ([
+                        ['Predictive but not profitable', 'NOT ESTABLISHED', 'ICIR is positive but small; no net-of-cost edge survives.'],
+                        ['Profitable but factor-driven', 'LIKELY', 'R² 0.70 against QQQ + SOXX; residual alpha is not significant.'],
+                        ['Profitable but capacity-limited', 'NOT TESTED', 'Capacity analysis not run.'],
+                        ['Statistically significant but economically trivial', 'APPLIES', 'Alpha t-stat 0.57 — indistinguishable from zero.'],
+                      ] as const)
                   ).map(([k, verdict, note]) => (
                     <div key={k} className="flex items-start justify-between gap-3 border-b border-ink-700/50 pb-2 last:border-0">
                       <div className="min-w-0">
@@ -456,7 +577,11 @@ export function ResearchAudit() {
                 </div>
               </Panel>
 
-              <Panel title="Adversarial review" subtitle="Questions asked before accepting any result">
+              <Panel
+                title="Adversarial review"
+                subtitle="Questions asked before accepting any result"
+                provenance={modelsAreSynthetic ? 'pending' : 'mixed'}
+              >
                 <ol className="space-y-1.5">
                   {(
                     [
@@ -476,7 +601,11 @@ export function ResearchAudit() {
                       <span className="shrink-0 font-mono text-3xs text-fg-mute">
                         {String(i + 1).padStart(2, '0')}
                       </span>
-                      <span className="text-2xs leading-relaxed text-fg-dim">{q}</span>
+                      <span className="text-2xs leading-relaxed text-fg-dim">
+                        {modelsAreSynthetic
+                          ? `${q.slice(0, q.indexOf(' — '))} — PENDING · no model trained yet (Phases 5–7).`
+                          : q}
+                      </span>
                     </li>
                   ))}
                 </ol>
@@ -486,9 +615,18 @@ export function ResearchAudit() {
                 <dl className="space-y-1.5">
                   {(
                     [
-                      ['Seed', String(manifest.seed)],
-                      ['Generator', 'dashboard/scripts/gen_demo_data.py'],
-                      ['Runtime', '< 1 s · stdlib only · no ML packages'],
+                      [
+                        'Market data',
+                        acq
+                          ? `Yahoo Finance EOD · ${acq.notebook} · ${fmtDate(acq.executed_at.slice(0, 10))}`
+                          : 'Not yet acquired',
+                      ],
+                      [
+                        'Synthetic surfaces',
+                        syntheticCount > 0
+                          ? `dashboard/scripts/gen_demo_data.py · seed ${manifest.seed}`
+                          : 'none in this build',
+                      ],
                       ['Spec version', `v${manifest.spec_version}`],
                       ['Universe version', `v${manifest.universe_version}`],
                       ['Validation', '131/131 schema tests passed'],

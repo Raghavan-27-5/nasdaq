@@ -5,7 +5,8 @@
 - Phase 0A: `COMPLETE`
 - Phase 0: `COMPLETE`
 - Phase 1: `READY`
-- Phase 11 (Dashboard): `IN REVIEW` — frontend complete; consuming synthetic fixtures pending Phase 3-10 artifacts
+- Phase 3: `IN PROGRESS` — v002 acquisition notebook prepared and rehearsed offline (103/103 checks); awaiting Colab execution for the first real market-data bundle
+- Phase 11 (Dashboard): `IN REVIEW` — frontend complete and provenance-driven; consuming synthetic fixtures until Phase 3-10 artifacts land
 
 ## Decision ledger
 
@@ -27,6 +28,13 @@
 | D0014 | 2026-10-10 | 11 | Dashboard frontend built as a standalone React/Vite/TypeScript SPA rather than the suggested Streamlit + Plotly | `CONTEXT.md` §"Dashboard vision" permits a separate frontend when justified. Streamlit cannot produce the institutional-terminal visual quality this deliverable requires. Recorded as a documented deviation; `WORKTREE.md` directory contract preserved (`dashboard/pages/`, `dashboard/components/`, `dashboard/styles/`), only `app.py` → `App.tsx`. | LOCKED |
 | D0015 | 2026-10-10 | 11 | Dashboard currently renders SYNTHETIC demo fixtures, not research output | `dashboard/scripts/gen_demo_data.py`, seed 20260925, deterministic. Real content limited to `universe_verification_v001.json`. Every synthetic artifact carries `synthetic: true` + disclaimer; Research Audit carries a full real-vs-simulated ledger and a persistent DEMO badge. Gate 9 is therefore `IN REVIEW`, not `PASS`. | NOTED |
 | D0016 | 2026-10-10 | 11 | Synthetic market data is internally consistent by construction, not hand-authored | Correlations, betas, volatilities, drawdowns and the equal-weight benchmark are computed from the generated price series; only unobservable quantities (LightGBM IC, SHAP, fundamentals, optimiser output) are authored placeholders. Regime structure mirrors RESEARCH_PROTOCOL §18 (2020 crash, 2022 drawdown, 2023-24 AI-capex, 2025 unwind, 2026 continuation). | NOTED |
+| D0017 | 2026-10-16 | 3 | Acquisition notebook corrected as v002 bug-fix release: VaR/ES quantile+sign convention fixed (emitted as positive loss magnitudes), real Ledoit-Wolf shrinkage, stress scenarios from realised benchmark drawdowns, splits/dividends captured, checksummed clean Parquet, canonical provenance ledger written into the bundle | `dashboard/notebooks/colab/build_notebook.py`; offline dry run 103/103 checks green | LOCKED |
+| D0018 | 2026-10-16 | 11 | Dashboard provenance is fully artifact-driven; all hardcoded synthetic/demo badges removed. Surfaces resolve from artifact `synthetic` flags + `manifest.real_vs_synthetic` ledger (REAL… / SYNTHETIC… / else PENDING) | `dashboard/src/lib/provenance.ts`; all pages consume it | LOCKED |
+| D0019 | 2026-10-16 | 3/11 | Canonical 12-row provenance ledger is a shared contract between the acquisition notebook and `gen_demo_data.py`: identical surface keys in identical order | Notebook Cell 9 `LEDGER` ⇄ `gen_demo_data.py` `LEDGER`; dry-run parity check | LOCKED |
+| D0020 | 2026-10-16 | 11 | `gen_demo_data.py` never overwrites `synthetic:false` artifacts; manifest merge preserves real-run metadata. `--force` is an explicit full fixture reset. Partial-real trees are the supported upgrade path | Guard/merge tested: stub real bundle installed → 4 files skipped, acquisition block + REAL rows preserved | LOCKED |
+| D0021 | 2026-10-16 | 3/11 | Pre-Phase-9 risk statistics describe an equal-weight reference book (`portfolio_basis: "equal_weight_placeholder"` + `reference_weights`), not a fitted portfolio; UI suppresses MCTR/CCTR when requested weights ≠ reference book | risk.json contract; PortfolioOptimizer suppression; dry-run checks | NOTED |
+| D0022 | 2026-10-16 | 3 | Stooq proof-of-work solver disabled (`ALLOW_STOOQ_POW=False`): Yahoo is the designated source, and building anti-bot circumvention into the pipeline is not worth it for a redundant fallback | `build_notebook.py`; colab README §Stooq | LOCKED |
+| D0023 | 2026-10-16 | 3 | Offline dry-run harness is the pre-flight gate for the acquisition notebook; bundle-contract changes must pass it before a Colab run | `dashboard/notebooks/colab/dry_run_notebook.py` — exits 0 on 103/103 checks | LOCKED |
 
 ## Phase 0 tasks
 

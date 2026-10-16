@@ -2,6 +2,7 @@ import { useState } from 'react'
 import clsx from 'clsx'
 import { ROUTES, useApp } from '@/lib/store'
 import { TICKER_META, TICKERS, market, universe } from '@/lib/data'
+import { dataMode } from '@/lib/provenance'
 import { humanise, fmtDate } from '@/lib/format'
 import { Badge } from '@/components/ui/Value'
 
@@ -98,12 +99,12 @@ export function Topbar() {
         <span className="font-mono text-[11.5px] text-fg-dim">{universe.research_window.end_inclusive}</span>
       </div>
 
-      {/* Audit mode: reveals inline SIM markers across every panel. */}
+      {/* Audit mode: reveals inline provenance markers across every panel. */}
       <button
         type="button"
         onClick={toggleAuditMode}
         aria-pressed={auditMode}
-        title="Toggle inline SIMULATED markers on every panel"
+        title="Toggle inline provenance markers on every panel"
         className={clsx(
           'flex items-center gap-1.5 rounded-sm border px-2 py-[3px] font-mono text-3xs font-semibold uppercase tracking-wider transition-colors',
           auditMode
@@ -121,8 +122,8 @@ export function Topbar() {
         Audit mode
       </button>
 
-      <Badge tone="warn" title="Market, model and portfolio figures in this build are synthetic demo fixtures, not research output.">
-        Demo data
+      <Badge tone={dataMode.tone} title={dataMode.title}>
+        {dataMode.label}
       </Badge>
 
       <button

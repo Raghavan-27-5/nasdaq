@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { Page, Segmented } from '@/components/ui/Page'
-import { Panel, Eyebrow } from '@/components/ui/Panel'
+import { Panel, Eyebrow, Sim } from '@/components/ui/Panel'
 import { Value, Badge, Delta, MiniBar } from '@/components/ui/Value'
 import { EChart } from '@/components/charts/EChart'
 import { drawdownSeries } from '@/components/charts/primitives'
 import { timeSeriesOption, drawdownOption } from '@/lib/chartopts'
 import { C, SERIES_COLOR } from '@/lib/palette'
 import { backtest, market, portfolio } from '@/lib/data'
+import { portfolioIsSynthetic, seriesProvenance } from '@/lib/provenance'
 import { useApp } from '@/lib/store'
-import { nf, pct, pctSigned } from '@/lib/format'
+import { nf, nfInt, pct, pctSigned } from '@/lib/format'
 
 const ORDER = ['ML_PORTFOLIO', 'EW_UNIVERSE', 'QQQ', 'SOXX', 'SPY'] as const
 const LABEL: Record<string, string> = {
@@ -92,6 +93,7 @@ export function Backtest() {
   const ml = perf.ML_PORTFOLIO
   const att = backtest.attribution
   const alphaT = att.factors[0]?.tstat
+  const mlSim = seriesProvenance('ML_PORTFOLIO') !== 'real'
 
   const yearly = useMemo(() => {
     // The strategy series exists from 2020, but only 2022 onward is out-of-
@@ -211,7 +213,18 @@ export function Backtest() {
           <Panel
             title={mode === 'relative' ? `Relative performance vs ${base}` : mode === 'drawdown' ? 'Underwater plot' : 'Growth of 100 · out-of-sample'}
             subtitle={`${backtest.oos_start} → ${backtest.oos_end} · ${backtest.rebalance} · ${backtest.cost_bps_round_trip}bps RT`}
-            actions={<Badge tone="warn">synthetic</Badge>}
+            actions={
+              mlSim ? (
+                <Badge
+                  tone="warn"
+                  title="Equal-weight universe and benchmark curves are computed from real prices; the ML portfolio curve is a synthetic placeholder until Phase 6/9/10 outputs land."
+                >
+                  ML curve · sim
+                </Badge>
+              ) : (
+                <Badge tone="pos">real</Badge>
+              )
+            }
           >
             <EChart
               option={mode === 'equity' ? equityOption : mode === 'drawdown' ? ddOption : relOption}
@@ -234,6 +247,7 @@ export function Backtest() {
                 {ORDER.map((k) => {
                   const p = perf[k]
                   const isML = k === 'ML_PORTFOLIO'
+                  const sim = seriesProvenance(k) !== 'real'
                   return (
                     <tr key={k} className={clsx(isML && 'bg-sig-pos/[0.04]')}>
                       <td>
@@ -246,6 +260,7 @@ export function Backtest() {
                           <span className={isML ? 'font-medium text-fg-hi' : 'text-fg-base'}>
                             {LABEL[k]}
                           </span>
+                          {sim && <Sim className="ml-0.5" />}
                         </span>
                       </td>
                       <td className="num">
@@ -264,10 +279,21 @@ export function Backtest() {
             <div className="border-t border-ink-700 px-4 py-3">
               <Eyebrow>Honest read</Eyebrow>
               <p className="mt-1.5 text-2xs leading-relaxed text-fg-dim">
-                The ML portfolio does not outperform the Nasdaq-100 on this window, and the
-                factor-controlled alpha is not statistically significant (t = {nf(alphaT ?? 0, 2)}).
-                That is a legitimate research finding, not a failure of the dashboard — it is exactly
-                the outcome the adversarial checklist is designed to surface.
+                {mlSim ? (
+                  <>
+                    Straight reading of what is real today: the equal-weight universe and the
+                    benchmarks are computed from real prices, while the ML portfolio curve is still a
+                    flagged placeholder. Factor attribution below describes the equal-weight book
+                    (alpha t = {nf(alphaT ?? 0, 2)}); model-based claims wait for Phase 6/7 outputs.
+                  </>
+                ) : (
+                  <>
+                    The ML portfolio does not outperform the Nasdaq-100 on this window, and the
+                    factor-controlled alpha is not statistically significant (t = {nf(alphaT ?? 0, 2)}).
+                    That is a legitimate research finding, not a failure of the dashboard — it is
+                    exactly the outcome the adversarial checklist is designed to surface.
+                  </>
+                )}
               </p>
               <button
                 type="button"
@@ -475,6 +501,12 @@ export function Backtest() {
                 cannot establish capacity where participation rate and modelled market impact are
                 unmeasured.
               </p>
+              {portfolioIsSynthetic && (
+                <p className="text-2xs leading-relaxed text-fg-mute">
+                  Turnover and the ML curve are synthetic fixtures in this build — the robustness
+                  test reruns on the real strategy once Phase 9/10 outputs land.
+                </p>
+              )}
             </div>
           </Panel>
         </div>
@@ -483,4 +515,3 @@ export function Backtest() {
   )
 }
 
-const nfInt = (v: number) => Math.round(v).toLocaleString('en-US')
