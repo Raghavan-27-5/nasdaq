@@ -61,3 +61,6 @@ dashboard/dist/
 dashboard/src/data/
 dashboard/.vite/
 dashboard/*.tsbuildinfo
+
+# Local live-acquisition artifacts (canonical copy goes to Drive)
+artifacts/acquisition_v001/

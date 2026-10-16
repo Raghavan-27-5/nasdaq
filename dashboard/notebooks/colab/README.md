@@ -134,17 +134,42 @@ Acquisition retries per ticker and records the full failure chain
 
 `dry_run_notebook.py` rehearses the whole notebook offline: it neutralises Colab-only
 calls, stubs the network fetchers with deterministic frames (including the CRWV listing
-gap and corporate actions), executes every cell, and audits the emitted bundle —
-ledger parity with `gen_demo_data.py`, VaR conventions, covariance fit, stress scenario
-sources, panel flags, checksums.
+gap, corporate actions, and two tickers forced through the tz-aware yfinance fallback
+shape), executes every cell, and audits the emitted bundle — ledger parity with
+`gen_demo_data.py`, VaR conventions, covariance fit, stress scenario sources, panel
+flags, checksums.
 
 ```bash
 /tmp/opencode/venv/bin/python dashboard/notebooks/colab/dry_run_notebook.py
 ```
 
-Exit code 0 = every check passed. Current status: **103/103 checks green**. This does not
-prove Yahoo reachability — only a real Colab run does that — but it does prove the
+Exit code 0 = every check passed. Current status: **107/107 checks green**. This does not
+prove Yahoo reachability — only a real acquisition run does that — but it does prove the
 processing chain, schemas, and cross-file consistency on the real code paths.
+
+The same harness has a **live mode** that keeps the real fetchers instead of the stubs:
+
+```bash
+/tmp/opencode/venv/bin/python dashboard/notebooks/colab/dry_run_notebook.py --live
+```
+
+It performs the real acquisition (23 series, bounded — a few MB), runs the same audit,
+and on a fully green run installs the bundle into `dashboard/src/data/` and copies the
+Parquet artifacts to `artifacts/acquisition_v001/` for the manual Drive upload. If any
+check fails, nothing is installed. Use it when Colab's shared IP range is too throttled
+by Yahoo (HTTP 429) — it is still the same processing code, just executed from the
+control plane under explicit owner instruction.
+
+### Known bug fixed in v002 (keep the regression stubs)
+
+v002's first live Colab attempt surfaced a silent killer: after chart-API 429s, the
+yfinance fallback returned a perfect frame (1,689 rows) that `normalise()` then dropped
+entirely. Cause: the output frame was built at `idx.normalize()` while the column Series
+carried the raw index (yfinance's ET-midnight stamps = 04:00/05:00 UTC). Pandas aligned
+on the mismatched timestamps, NaNed every column, and `dropna()` discarded all rows.
+Fixed by normalising the index once and using it for both. The harness now routes MU and
+QCOM through a forced chart-429 → tz-aware-yfinance stub so this class of bug can never
+silently return.
 
 ## Verification status
 
@@ -164,13 +189,26 @@ for all 23 series (1,689 trading days, 2020-01-02 → 2026-09-22), which surface
 yfinance column-drift failure described above. That is what motivated the chart API as
 primary source, the request pacing, and the diagnostic output in `normalise()`.
 
-**Stage 3 — v002 offline rehearsal.** The dry-run harness (above) passes 103/103 checks
+**Stage 3 — v002 offline rehearsal.** The dry-run harness (above) passes 107/107 checks
 over the full v002 pipeline. v002 fixes vs v001: correct VaR/ES quantile + sign
 convention, real Ledoit-Wolf shrinkage (no sample-covariance fallback when sklearn is
 present), stress scenarios computed from realised benchmark drawdowns, splits/dividends
 captured from the chart API, full-panel clean Parquet with `is_tradable` / `is_valid`
 flags and SHA-256 checksums, and the canonical provenance ledger written into
-`manifest.json`. The remaining unverified step is the live Colab run of v002 itself.
+`manifest.json`.
+
+**Stage 4 — live acquisition executed (control plane, owner-instructed).** The live path
+was run end-to-end via `dry_run_notebook.py --live` (same processing code, real fetchers):
+**23/23 series, 1,689 trading days (2020-01-02 → 2026-09-22), validation PASS (26
+checks), bundle audit 103/103, 320 corporate-action events, 0 failures.** Yahoo
+429-throttled the chart API on every ticker from both Colab's IP range and the local IP;
+the fixed yfinance fallback carried all 23 series. Corporate actions captured via the
+yfinance actions table included NVDA's two splits (4:1 in 2021, 10:1 in 2024) and AMZN's
+single 20:1 split, with non-payers correctly at zero events. Two defects were fixed to
+get here: the `normalise()` tz-alignment bug above, and the yfinance fallback silently
+returning no corporate actions. The bundle is installed in `dashboard/src/data/`; the
+Parquet artifacts are staged in `artifacts/acquisition_v001/` for the Drive upload. Full
+record: PHASE_LOG D0024, `artifacts/acquisition_v001/live_run.log`.
 
 ## Regenerating
 

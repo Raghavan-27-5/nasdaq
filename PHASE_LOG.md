@@ -5,7 +5,7 @@
 - Phase 0A: `COMPLETE`
 - Phase 0: `COMPLETE`
 - Phase 1: `READY`
-- Phase 3: `IN PROGRESS` — v002 acquisition notebook prepared and rehearsed offline (103/103 checks); awaiting Colab execution for the first real market-data bundle
+- Phase 3: `IN REVIEW` — first real market-data bundle acquired via live mode (23/23 series, validation PASS, audit 103/103); installed into dashboard (partial-real). Parquet awaiting Drive upload.
 - Phase 11 (Dashboard): `IN REVIEW` — frontend complete and provenance-driven; consuming synthetic fixtures until Phase 3-10 artifacts land
 
 ## Decision ledger
@@ -35,6 +35,7 @@
 | D0021 | 2026-10-16 | 3/11 | Pre-Phase-9 risk statistics describe an equal-weight reference book (`portfolio_basis: "equal_weight_placeholder"` + `reference_weights`), not a fitted portfolio; UI suppresses MCTR/CCTR when requested weights ≠ reference book | risk.json contract; PortfolioOptimizer suppression; dry-run checks | NOTED |
 | D0022 | 2026-10-16 | 3 | Stooq proof-of-work solver disabled (`ALLOW_STOOQ_POW=False`): Yahoo is the designated source, and building anti-bot circumvention into the pipeline is not worth it for a redundant fallback | `build_notebook.py`; colab README §Stooq | LOCKED |
 | D0023 | 2026-10-16 | 3 | Offline dry-run harness is the pre-flight gate for the acquisition notebook; bundle-contract changes must pass it before a Colab run | `dashboard/notebooks/colab/dry_run_notebook.py` — exits 0 on 103/103 checks | LOCKED |
+| D0024 | 2026-10-16 | 3 | First real acquisition executed from the control plane under explicit owner instruction (`dry_run_notebook.py --live`: same processing code as the notebook, real fetchers, scratch-redirected Colab paths). 23/23 series, 1,689 trading days 2020-01-02 → 2026-09-22, validation PASS (26 checks), audit 103/103, 320 corporate-action events, 0 failures. Two v002 defects found and fixed en route: (a) `normalise()` built the frame at `idx.normalize()` while columns carried the raw tz-converted index — pandas aligned on the mismatch, NaNed every column and dropped complete frames from tz-aware sources (this is what killed the live Colab attempt); (b) the yfinance fallback fetched with `actions=False`, so a throttled chart API left splits/dividends unrecorded. Both regression-covered; dry run extended to 107/107. Boundary note: `AGENTS.md` §3 expects Yahoo acquisition in Colab; this bounded run (few MB, I/O-bound) executed locally because the Colab path was IP-throttled and the owner instructed it. Bundle installed to `dashboard/src/data`; Parquet copied to `artifacts/acquisition_v001/` for the Drive upload. Yahoo 429-throttled the chart API on both Colab and local IPs; the (fixed) yfinance fallback carried all 23 series | `artifacts/acquisition_v001/live_run.log`; installed `run_manifest.json`; dry run 107/107 | LOCKED |
 
 ## Phase 0 tasks
 

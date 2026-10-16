@@ -54,6 +54,7 @@ const DECISIONS = [
   ['D0021', '2026-10-16', '3/11', 'Pre-Phase-9 risk stats describe the equal-weight reference book, not a fitted portfolio', 'portfolio_basis: equal_weight_placeholder + reference_weights', 'NOTED'],
   ['D0022', '2026-10-16', '3', 'Stooq proof-of-work solver disabled; Yahoo remains the designated source', 'ALLOW_STOOQ_POW=False in acquisition notebook', 'LOCKED'],
   ['D0023', '2026-10-16', '3', 'Offline dry-run harness is the pre-flight gate for any live Colab acquisition run', 'dry_run_notebook.py — executes all cells, audits bundle contract', 'LOCKED'],
+  ['D0024', '2026-10-16', '3', 'First real acquisition executed (live mode): fixed normalise() tz-alignment frame loss + yfinance corporate-action capture; 23/23 series, 320 actions, 0 failures', 'validation PASS 26 checks; audit 103/103; bundle installed to dashboard (partial-real)', 'LOCKED'],
 ] as const
 
 const OPEN_ISSUES = [

@@ -64,11 +64,12 @@ trained model (Phase 6), not just prices.
 
 **v002 changes.** Fixed the VaR/ES quantile+sign bug (95/99 now both correct, emitted as
 positive loss magnitudes); real Ledoit-Wolf shrinkage and condition numbers; stress
-scenarios computed from realised benchmark drawdowns; splits/dividends captured from the
-chart API; full-panel clean Parquet with `is_tradable` / `is_valid` flags; SHA-256 of
-every Parquet in the run manifest; `manifest.json` (canonical 12-row provenance ledger +
-acquisition block) written straight into the dashboard bundle. Stooq proof-of-work
-solving is disabled to match the README.
+scenarios computed from realised benchmark drawdowns; splits/dividends captured from
+whichever source delivered the series (chart API events block, or the yfinance actions
+table when the fallback was used); full-panel clean Parquet with `is_tradable` /
+`is_valid` flags; SHA-256 of every Parquet in the run manifest; `manifest.json`
+(canonical 12-row provenance ledger + acquisition block) written straight into the
+dashboard bundle. Stooq proof-of-work solving is disabled to match the README.
 
 **Compute boundary.** This runs in Colab, never on the local control plane. See `AGENTS.md` §2.
 
@@ -331,16 +332,38 @@ def fetch_chart_api(ticker, tries=3):
 
 def fetch_yfinance(ticker, tries=2):
     # Fallback. Column naming varies by version, so normalise() inspects what
-    # actually arrived rather than assuming a fixed column set.
+    # actually arrived rather than assuming a fixed column set. Actions are
+    # requested too: when the chart API is throttled this source becomes the
+    # ONLY record of splits/dividends, and an invisible 4:1 split is a silent
+    # return corruption (RESEARCH_PROTOCOL 5).
     last = "unknown"
     for attempt in range(1, tries + 1):
         try:
             df = yf.Ticker(ticker).history(start=START, end=END_EXCLUSIVE,
                                            interval="1d", auto_adjust=False,
-                                           actions=False)
+                                           actions=True)
             if df is None or df.empty:
                 last = "empty frame"
                 continue
+            events = []
+            if "Dividends" in df.columns:
+                for ts_, amt in df.loc[df["Dividends"] > 0, "Dividends"].items():
+                    events.append({
+                        "type": "dividend",
+                        "date": pd.Timestamp(ts_).date().isoformat(),
+                        "amount": round(float(amt), 6),
+                    })
+            if "Stock Splits" in df.columns:
+                for ts_, ratio in df.loc[df["Stock Splits"] > 0, "Stock Splits"].items():
+                    r = float(ratio)
+                    events.append({
+                        "type": "split",
+                        "date": pd.Timestamp(ts_).date().isoformat(),
+                        "numerator": r,
+                        "denominator": 1.0,
+                        "ratio": f"{r:g}:1",
+                    })
+            ACTIONS[ticker] = sorted(events, key=lambda x: x["date"])
             return df, f"yfinance:attempt{attempt}"
         except TypeError as e:
             # Signature drift: retry with the bare minimum.
@@ -441,7 +464,16 @@ def normalise(df, ticker):
     idx = pd.DatetimeIndex(pd.to_datetime(df.index))
     if idx.tz is not None:
         idx = idx.tz_convert("UTC").tz_localize(None)
-    out = pd.DataFrame(index=idx.normalize())
+    # Normalise ONCE and use this exact index for BOTH the frame and the
+    # column Series below. The previous version built the frame at
+    # idx.normalize() while the columns carried the raw idx (e.g. yfinance's
+    # ET-midnight stamps = 04:00/05:00 UTC). Pandas aligned on the
+    # non-matching timestamps, every column became NaN, and dropna()
+    # discarded the whole frame - "1689 rows dropped" on a perfectly good
+    # fetch. Regression-covered by the tz-aware fallback stub in
+    # dry_run_notebook.py.
+    idx = idx.normalize()
+    out = pd.DataFrame(index=idx)
     avail = {str(c).lower(): c for c in df.columns}
 
     def col(*names):
@@ -530,7 +562,8 @@ for idx, tk in enumerate(UNIVERSE + BENCHMARKS):
         "rows": int(len(clean)),
         "first": clean.index.min().date().isoformat(),
         "last":  clean.index.max().date().isoformat(),
-        "corporate_actions": (len(ACTIONS.get(tk, [])) if src == "yahoo_chart_api"
+        "corporate_actions": (len(ACTIONS.get(tk, []))
+                              if src in ("yahoo_chart_api", "yfinance")
                               else "not-reported-by-source"),
     }
     report["sources"][tk] = src
@@ -711,7 +744,9 @@ print("clean  ->", CLEAN_PATH,
       f"({len(clean):,} rows, {int(clean['is_tradable'].sum()):,} tradable, "
       f"{int(clean['is_valid'].sum()):,} valid)")
 
-# Corporate actions (splits/dividends) observed by the primary source.
+# Corporate actions (splits/dividends) captured from whichever source
+# delivered each series: the chart API's `events` block, or the yfinance
+# actions table when the fallback was used.
 _act_cols = ["ticker", "type", "date", "amount", "numerator", "denominator", "ratio"]
 if ACTIONS:
     act = pd.DataFrame([{"ticker": tk, **e} for tk, evs in ACTIONS.items() for e in evs])

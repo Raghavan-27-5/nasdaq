@@ -21,6 +21,13 @@ consistency all work on the real code paths, offline.
 
 Usage:
     /tmp/opencode/venv/bin/python dashboard/notebooks/colab/dry_run_notebook.py
+    /tmp/opencode/venv/bin/python dashboard/notebooks/colab/dry_run_notebook.py --live
+
+Default (dry-run) mode uses stubbed fetchers. `--live` keeps the REAL network
+fetchers and writes the audited bundle into dashboard/src/data (Parquet goes to
+artifacts/acquisition_v001/, ready for Drive upload). Colab-only calls
+(drive.mount, files.download, !pip) are always neutralised and /content paths
+are always redirected to a scratch directory.
 
 Exit code 0 = every check passed.
 """
@@ -45,7 +52,15 @@ REPO_ROOT = HERE.parents[2]
 NOTEBOOK = HERE / "nasdaq_ai_quant_acquire_v002.ipynb"
 GEN_DEMO = REPO_ROOT / "dashboard" / "scripts" / "gen_demo_data.py"
 FIXTURE_DATA = REPO_ROOT / "dashboard" / "src" / "data"
-SCRATCH = Path(os.environ.get("DRY_RUN_DIR", "/tmp/opencode/dryrun"))
+LIVE = "--live" in sys.argv
+SCRATCH = Path(
+    os.environ.get(
+        "LIVE_RUN_DIR" if LIVE else "DRY_RUN_DIR",
+        "/tmp/opencode/live_run" if LIVE else "/tmp/opencode/dryrun",
+    )
+)
+# Where Parquet artifacts are copied for the manual Drive upload (LIVE only).
+PARQUET_OUT = REPO_ROOT / "artifacts" / "acquisition_v001"
 
 FAILURES: list[str] = []
 _checks = 0
@@ -75,9 +90,20 @@ STUB_ACTIONS: dict[str, list[dict]] = {
     ],
     "MSFT": [{"type": "dividend", "date": "2024-06-13", "amount": 0.75}],
     "SOXX": [{"type": "dividend", "date": "2023-09-18", "amount": 0.42}],
+    # Fallback-sourced tickers: these arrive via the yfinance stub, which now
+    # mirrors the live capture of the actions table.
+    "MU": [{"type": "dividend", "date": "2023-10-06", "amount": 0.13}],
+    "QCOM": [{"type": "dividend", "date": "2024-05-30", "amount": 0.85}],
 }
 
 LISTING_LAG = {"PLTR": "2020-09-30", "CRWV": "2025-03-21"}
+
+# Tickers rehearsed through the chart-429 -> yfinance fallback path, with
+# frames carrying the REAL yfinance index shape (tz-aware America/New_York
+# midnights -> 04:00/05:00 UTC after normalise's tz conversion). This is the
+# exact shape that silently blanked every column before the `normalise()` fix;
+# keep them in the stub so the regression can never come back unnoticed.
+YF_FALLBACK_STUBS = {"MU", "QCOM"}
 
 
 def build_stub_frames(
@@ -123,10 +149,20 @@ def install_stub_fetchers(ns: dict) -> None:
     )
 
     def stub_chart(ticker, tries=3):
+        if ticker in YF_FALLBACK_STUBS:
+            # Forced 429 exhaustion: hands off to the yfinance stub below.
+            return None, "dry_run_stub:forced-429"
         ns["ACTIONS"][ticker] = [dict(e) for e in STUB_ACTIONS.get(ticker, [])]
         return frames[ticker].copy(), "dry_run_stub:attempt1"
 
     def stub_yf(ticker, tries=2):
+        if ticker in YF_FALLBACK_STUBS:
+            # Mirror the live capture of the yfinance actions table.
+            ns["ACTIONS"][ticker] = [dict(e) for e in STUB_ACTIONS.get(ticker, [])]
+            # Real yfinance returns a tz-aware America/New_York index at
+            # midnight; the tz -> UTC conversion then yields 04:00/05:00
+            # stamps. This shape is what regressed normalise().
+            return frames[ticker].tz_localize("America/New_York"), "dry_run_stub:yf"
         return None, "dry_run_stub:not-called"
 
     def stub_stooq(ticker, tries=2):
@@ -186,18 +222,19 @@ def run_notebook() -> dict:
         shutil.rmtree(SCRATCH)
     (SCRATCH / "drive").mkdir(parents=True)
 
-    # Fake yfinance (network module) before Cell 1 imports it.
-    import types
+    if not LIVE:
+        # Fake yfinance (network module) before Cell 1 imports it.
+        import types
 
-    fake_yf = types.ModuleType("yfinance")
-    fake_yf.__version__ = "dry-run-stub"
-    fake_yf.Ticker = lambda *a, **k: None
-    sys.modules["yfinance"] = fake_yf
+        fake_yf = types.ModuleType("yfinance")
+        fake_yf.__version__ = "dry-run-stub"
+        fake_yf.Ticker = lambda *a, **k: None
+        sys.modules["yfinance"] = fake_yf
 
-    ns: dict = {"__name__": "__dry_run__"}
+    ns: dict = {"__name__": "__live_run__" if LIVE else "__dry_run__"}
     for i, c in enumerate(code_cells):
         src = transform("".join(c["source"]))
-        if "def fetch_chart_api" in src:
+        if "def fetch_chart_api" in src and not LIVE:
             marker = 'report = {"tickers": {}, "failures": [], "sources": {}}'
             head, tail = src.split(marker, 1)
             exec_cell(ns, head, f"cell{i}-fetchers")
@@ -484,6 +521,22 @@ def audit(ns: dict) -> None:
     )
     check("no acquisition failures", run["failures"] == [])
 
+    if not LIVE:
+        print("\n--- fallback shape regression (tz-aware frames) -----------------")
+        for tk in sorted(YF_FALLBACK_STUBS):
+            t = ns["report"]["tickers"].get(tk, {})
+            check(
+                f"{tk}: acquired via yfinance fallback",
+                t.get("status") == "OK" and t.get("source") == "yfinance",
+                f"status={t.get('status')} source={t.get('source')}",
+            )
+            rows = ns["frames"].get(tk)
+            check(
+                f"{tk}: tz-aware frame survived normalise()",
+                rows is not None and len(rows) > 1000,
+                f"{0 if rows is None else len(rows)} rows",
+            )
+
     print("\n--- fixture parity check (dashboard data dir) ---------------------")
     if FIXTURE_DATA.exists():
         for fn in ("market.json", "risk.json", "backtest.json", "fundamentals.json"):
@@ -517,9 +570,47 @@ def audit(ns: dict) -> None:
     )
 
 
+def install_bundle(ns: dict) -> None:
+    """LIVE mode: install the audited bundle into dashboard/src/data and copy
+    the Parquet artifacts to a stable local folder for the Drive upload."""
+    local = Path(ns["LOCAL_DATA"])
+    FIXTURE_DATA.mkdir(parents=True, exist_ok=True)
+    copied = []
+    for fn in (
+        "market.json",
+        "risk.json",
+        "backtest.json",
+        "fundamentals.json",
+        "manifest.json",
+        "run_manifest.json",
+        "universe.json",
+    ):
+        src = local / fn
+        if src.exists():
+            shutil.copy2(src, FIXTURE_DATA / fn)
+            copied.append(fn)
+    print(f"\ndashboard/src/data <- {', '.join(copied)}")
+
+    PARQUET_OUT.mkdir(parents=True, exist_ok=True)
+    for key in ("RAW_PATH", "CLEAN_PATH", "ACTIONS_PATH"):
+        p_ = Path(ns[key])
+        if p_.exists():
+            shutil.copy2(p_, PARQUET_OUT / p_.name)
+    print("Parquet artifacts (upload to Drive, see paths below):")
+    print(f"  local : {PARQUET_OUT}/")
+    for key in ("RAW_PATH", "CLEAN_PATH", "ACTIONS_PATH"):
+        p_ = Path(ns[key])
+        rel = p_.relative_to(SCRATCH / "drive")
+        print(f"  Drive : MyDrive/{rel.parent}/  <- {p_.name}")
+
+
 def main() -> int:
     print("=" * 72)
-    print("dry-run rehearsal — synthetic fetchers, real processing code")
+    print(
+        "LIVE acquisition — real fetchers, real network"
+        if LIVE
+        else "dry-run rehearsal — synthetic fetchers, real processing code"
+    )
     print("=" * 72)
     ns = run_notebook()
     print("\n" + "=" * 72)
@@ -528,12 +619,20 @@ def main() -> int:
     audit(ns)
     print("\n" + "=" * 72)
     if FAILURES:
-        print(f"DRY RUN FAILED — {len(FAILURES)} of {_checks} checks failed:")
+        print(
+            f"{'LIVE RUN' if LIVE else 'DRY RUN'} FAILED — "
+            f"{len(FAILURES)} of {_checks} checks failed:"
+        )
         for f in FAILURES:
             print("  -", f)
         return 1
-    print(f"DRY RUN PASSED — {_checks}/{_checks} checks green.")
-    print(f"stub bundle (for UI experiments only): {SCRATCH / 'dashboard_data'}")
+    print(
+        f"{'LIVE RUN' if LIVE else 'DRY RUN'} PASSED — {_checks}/{_checks} checks green."
+    )
+    if LIVE:
+        install_bundle(ns)
+    else:
+        print(f"stub bundle (for UI experiments only): {SCRATCH / 'dashboard_data'}")
     return 0
 
 
