@@ -4,7 +4,8 @@
   "spec_version": "0.1.0",
   "universe_version": "0.1.0",
   "notebook": "nasdaq_ai_quant_acquire_v002.ipynb",
-  "executed_at": "2026-10-16T12:20:14.570469+00:00",
+  "executed_at": "2026-10-16T12:55:38.275420+00:00",
+  "run_context": "local_reprocess (from saved prices_v001.parquet; frozen acquisition 2026-10-16)",
   "window": {
     "start": "2020-01-01",
     "end_inclusive": "2026-09-22"
@@ -47,7 +48,7 @@
     "NVDA": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -56,7 +57,7 @@
     "AVGO": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -65,7 +66,7 @@
     "AMD": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -74,7 +75,7 @@
     "MU": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -83,7 +84,7 @@
     "MSFT": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -92,7 +93,7 @@
     "GOOGL": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -101,7 +102,7 @@
     "AMZN": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -110,7 +111,7 @@
     "META": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -119,7 +120,7 @@
     "PLTR": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1501,
       "first": "2020-09-30",
       "last": "2026-09-22",
@@ -128,7 +129,7 @@
     "MRVL": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -137,7 +138,7 @@
     "LRCX": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -146,7 +147,7 @@
     "AMAT": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -155,7 +156,7 @@
     "CDNS": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -164,7 +165,7 @@
     "SNPS": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -173,7 +174,7 @@
     "PANW": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -182,7 +183,7 @@
     "CRWD": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -191,7 +192,7 @@
     "ADBE": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -200,7 +201,7 @@
     "DDOG": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -209,7 +210,7 @@
     "CRWV": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 373,
       "first": "2025-03-28",
       "last": "2026-09-22",
@@ -218,7 +219,7 @@
     "QCOM": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -227,7 +228,7 @@
     "QQQ": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -236,7 +237,7 @@
     "SOXX": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -245,7 +246,7 @@
     "SPY": {
       "status": "OK",
       "source": "yfinance",
-      "note": "chart_api:FAILED:unknown -> yfinance:attempt1",
+      "note": "reprocess:chart-skipped -> reprocess:saved",
       "rows": 1689,
       "first": "2020-01-02",
       "last": "2026-09-22",
@@ -509,15 +510,15 @@
     "valid": 32276
   },
   "parquet": {
-    "prices_v001.parquet": "1e9d2c016c85ef1895e76167e4f5aabb37383e0cbd842d7bbc34a01800ed58e2",
-    "clean_prices_v001.parquet": "d0f57c60b7a8a7a9fc692e4f49f16e13806145738a49d8a222adca25809f1446",
+    "prices_v001.parquet": "a3d36ad23f2b81150a328fa4079b1506e3793d8796397b194116b17f73325be8",
+    "clean_prices_v001.parquet": "dca27196ca60ff42b1dc56e9312c40561c9f89fae8f29acffac0270509f176c0",
     "corporate_actions_v001.parquet": "e29bbab1d2bec3811bfaaa97ce6ea1d9858700cc7736de63d11a634c006008aa"
   },
   "files": {
     "market.json": "ec770b99d10996498d62e6d62ac9518f39c6d533ef8067e679edf4f2a4e44f03",
     "risk.json": "252f85b371619b89f0bae3089688439934ab778f7df8a712e89a7faeb97c02fe",
-    "backtest.json": "2ff1781e0642a700eab5e6c281577698afc5cc8684bf427c2e13bf37e251bc27",
-    "fundamentals.json": "ba73f103793f5c0d6e8dc338ca1d747ecced49e05fe434cb4bb7acf222e52d57",
-    "manifest.json": "e3f07c63999a91355a764e17f20d9dfd81964a9c26a01f9d0528619ed16aa809"
+    "backtest.json": "823abee4c805bc168bfdc3fc07649f0f907400ad3e85c93eab78333b5441f391",
+    "fundamentals.json": "a4bfedb4589d318289c03762ded5815c9785120bfbeb67216fa0cab16678571f",
+    "manifest.json": "7ae85d38fbf1aa990f7a65c1c141ff082a854c7f406699c77d017d884c2111b1"
   }
 }

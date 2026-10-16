@@ -772,8 +772,8 @@ FACTOR_DEFS = [
     ("earnings_revisions", "3m net EPS revision, z", "z", 0.12),
     ("momentum", "12-1 month residual momentum", "ratio", 0.08),
     ("volatility", "3m realised vol, inverted", "ratio", -0.05),
-    ("drawdown", "Drawdown from 52w high", "ratio", -0.03),
-    ("diversification", "Portfolio correlation contribution, inverted", "ratio", 0.06),
+    ("drawdown", "Drawdown from 52w high", "ratio", 0.03),
+    ("diversification", "Portfolio correlation contribution, inverted", "ratio", -0.06),
 ]
 
 
@@ -1303,23 +1303,24 @@ def gen_backtest(mk: dict, universe: list[dict], port: dict) -> dict:
         yrs = (n - 1) / 252.0
         cagr = (v[-1] / v[0]) ** (1 / yrs) - 1
         vol = std(r) * math.sqrt(252)
+        mu = (sum(r) / len(r)) * 252 if r else 0.0
         dn = [min(x, 0.0) for x in r]
         srt = std(dn) * math.sqrt(252)
+        w30 = (
+            [sum(r[i : i + 30]) for i in range(len(r) - 29)]
+            if len(r) >= 30
+            else [sum(r)]
+        )
         return {
             "cagr": round(cagr, 4),
             "vol": round(vol, 4),
-            "sharpe": round(cagr / vol, 3) if vol > 0 else 0.0,
-            "sortino": round(cagr / srt, 3) if srt > 0 else 0.0,
+            # Sharpe (rf 0) = annualised mean / vol. CAGR/vol (the previous
+            # convention) is not a Sharpe ratio and overstated it.
+            "sharpe": round(mu / vol, 3) if vol > 0 else 0.0,
+            "sortino": round(mu / srt, 3) if srt > 0 else 0.0,
             "max_dd": round(max_drawdown(v), 4),
-            "worst_30d": round(
-                min(
-                    quantiles([sum(r[i : i + 21]) for i in range(len(r) - 21)], [0.0])[
-                        0
-                    ],
-                    0,
-                ),
-                4,
-            ),
+            # Worst 30-TRADING-DAY cumulative return (was a rolling mean).
+            "worst_30d": round(math.expm1(min(w30)), 4),
             "final": round(v[-1], 2),
         }
 
@@ -1560,7 +1561,9 @@ def main() -> None:
         rets = mk["returns"][t]
         n = len(rets)
         vol60 = std(rets[-60:]) * math.sqrt(252)
-        mom126 = px / mk["levels"][t][max(-253, -n)] - 1
+        # 12-1 momentum: trailing 12 months excluding the most recent ~21
+        # trading days (matches the notebook and the field name).
+        mom121 = mk["levels"][t][-21] / mk["levels"][t][max(-253, -n)] - 1
         peak52 = max(mk["levels"][t][-252:])
         dd = px / peak52 - 1
         avg_corr = 0.0
@@ -1588,7 +1591,7 @@ def main() -> None:
                 "price": round(px, 2),
                 "market_cap_bn": round(px * SHARES_B[t], 1),
                 "vol_3m": round(vol60, 4),
-                "momentum_12_1": round(mom126, 4),
+                "momentum_12_1": round(mom121, 4),
                 "drawdown_52w": round(dd, 4),
                 "avg_corr": round(avg_corr / 19.0, 4),
                 "beta_qqq": round(beta(rets, mk["benchmarks"]["QQQ"]["returns"]), 3),
@@ -1596,18 +1599,20 @@ def main() -> None:
             }
         )
 
-    # Cross-sectional standardisation (rank-based, documented method).
-    def zrank(vals: list[float], higher_better: bool) -> list[float]:
-        order = sorted(range(len(vals)), key=lambda i: vals[i], reverse=higher_better)
+    # Cross-sectional standardisation (rank-based, documented method). Direction
+    # is carried ONLY by the weight sign: +1 for the highest raw value, -1 for
+    # the lowest. The previous version flipped the rank inside zrank AND carried
+    # a has-a-direction flag from the weight sign; the two contradicted each
+    # other and inverted every positive-weight factor (fixed 2026-10-16, same
+    # bug class as the notebook's build_fund_rows).
+    def zrank(vals: list[float]) -> list[float]:
+        order = sorted(range(len(vals)), key=lambda i: vals[i], reverse=True)
         z = [0.0] * len(vals)
         for pos, i in enumerate(order):
-            z[i] = 2 * pos / (len(vals) - 1) - 1
+            z[i] = 1 - 2 * pos / (len(vals) - 1)
         return z
 
     keys = [k for (k, *_rest) in FACTOR_DEFS]
-    hb = {
-        k: (w > 0) for (k, *_rest, w) in [(f[0], f[1], f[2], f[3]) for f in FACTOR_DEFS]
-    }
     contrib = {k: {} for k in keys}
     for k in keys:
         col = []
@@ -1624,7 +1629,7 @@ def main() -> None:
                 col.append(f["avg_corr"])
             else:
                 col.append(f[k])
-        zs = zrank(col, hb[k])
+        zs = zrank(col)
         weight = dict((a, b) for (a, _b, _c, b) in FACTOR_DEFS)[k]
         for i, f in enumerate(funds):
             contrib[k][f["ticker"]] = round(zs[i] * weight, 5)

@@ -143,7 +143,8 @@ flags, checksums.
 /tmp/opencode/venv/bin/python dashboard/notebooks/colab/dry_run_notebook.py
 ```
 
-Exit code 0 = every check passed. Current status: **107/107 checks green**. This does not
+Exit code 0 = every check passed. Current status: **123/123 checks green** (dry mode; 119/119
+in the real-data modes, which skip the stub-only fallback regression). This does not
 prove Yahoo reachability — only a real acquisition run does that — but it does prove the
 processing chain, schemas, and cross-file consistency on the real code paths.
 
@@ -159,6 +160,20 @@ Parquet artifacts to `artifacts/acquisition_v001/` for the manual Drive upload. 
 check fails, nothing is installed. Use it when Colab's shared IP range is too throttled
 by Yahoo (HTTP 429) — it is still the same processing code, just executed from the
 control plane under explicit owner instruction.
+
+And a **reprocess mode** that recalculates every derived artifact from the *saved frozen
+acquisition* instead of the network:
+
+```bash
+/tmp/opencode/venv/bin/python dashboard/notebooks/colab/dry_run_notebook.py --from-parquet
+```
+
+Frames are rebuilt from `artifacts/acquisition_v001/prices_v001.parquet` (+ the corporate
+actions file), the full processing chain re-runs, the same audit gates it, and a green run
+re-installs the bundle. Use it after fixing analytics code: it guarantees the dataset
+cannot change underneath the correction (Yahoo re-adjusts historical prices as new
+dividends accrue, so a re-fetch is not byte-stable). Every mode records its provenance in
+`run_context` inside `manifest.json` and `run_manifest.json`.
 
 ### Known bug fixed in v002 (keep the regression stubs)
 

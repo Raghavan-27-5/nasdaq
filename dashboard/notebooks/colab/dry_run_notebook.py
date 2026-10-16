@@ -22,9 +22,14 @@ consistency all work on the real code paths, offline.
 Usage:
     /tmp/opencode/venv/bin/python dashboard/notebooks/colab/dry_run_notebook.py
     /tmp/opencode/venv/bin/python dashboard/notebooks/colab/dry_run_notebook.py --live
+    /tmp/opencode/venv/bin/python dashboard/notebooks/colab/dry_run_notebook.py --from-parquet
 
 Default (dry-run) mode uses stubbed fetchers. `--live` keeps the REAL network
-fetchers and writes the audited bundle into dashboard/src/data (Parquet goes to
+fetchers. `--from-parquet` rebuilds the frames from the SAVED frozen acquisition
+(artifacts/acquisition_v001/prices_v001.parquet + corporate_actions_v001.parquet)
+so corrected analytics are recomputed without re-fetching against Yahoo (whose
+adjusted history shifts as new dividends accrue). Both real modes audit the
+bundle and install it into dashboard/src/data (Parquet is copied to
 artifacts/acquisition_v001/, ready for Drive upload). Colab-only calls
 (drive.mount, files.download, !pip) are always neutralised and /content paths
 are always redirected to a scratch directory.
@@ -36,6 +41,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import math
 import os
 import re
 import shutil
@@ -52,15 +58,31 @@ REPO_ROOT = HERE.parents[2]
 NOTEBOOK = HERE / "nasdaq_ai_quant_acquire_v002.ipynb"
 GEN_DEMO = REPO_ROOT / "dashboard" / "scripts" / "gen_demo_data.py"
 FIXTURE_DATA = REPO_ROOT / "dashboard" / "src" / "data"
-LIVE = "--live" in sys.argv
+MODE = (
+    "reprocess"
+    if "--from-parquet" in sys.argv
+    else "live"
+    if "--live" in sys.argv
+    else "dry"
+)
+LIVE = MODE == "live"  # kept for the existing checks that key on it
+REPROCESS = MODE == "reprocess"
 SCRATCH = Path(
     os.environ.get(
-        "LIVE_RUN_DIR" if LIVE else "DRY_RUN_DIR",
-        "/tmp/opencode/live_run" if LIVE else "/tmp/opencode/dryrun",
+        {"live": "LIVE_RUN_DIR", "reprocess": "REPROCESS_RUN_DIR"}.get(
+            MODE, "DRY_RUN_DIR"
+        ),
+        {
+            "live": "/tmp/opencode/live_run",
+            "reprocess": "/tmp/opencode/reprocess_run",
+        }.get(MODE, "/tmp/opencode/dryrun"),
     )
 )
-# Where Parquet artifacts are copied for the manual Drive upload (LIVE only).
+# Where Parquet artifacts are copied for the manual Drive upload (real modes).
 PARQUET_OUT = REPO_ROOT / "artifacts" / "acquisition_v001"
+# Saved frozen acquisition used by --from-parquet reprocessing.
+RAW_PARQUET = PARQUET_OUT / "prices_v001.parquet"
+ACTIONS_PARQUET = PARQUET_OUT / "corporate_actions_v001.parquet"
 
 FAILURES: list[str] = []
 _checks = 0
@@ -174,6 +196,61 @@ def install_stub_fetchers(ns: dict) -> None:
     ns["__stub_frames__"] = frames
 
 
+def install_reprocess_fetchers(ns: dict) -> None:
+    """--from-parquet mode: rebuild frames from the SAVED frozen acquisition.
+
+    The acquisition layer was already validated by the live run; this mode
+    recomputes every derived artifact on that exact frozen input (no network,
+    and no data drift from Yahoo re-adjusting history for later dividends).
+    Sources report the original `yfinance` provenance; the run context in the
+    manifests records the reprocessing explicitly.
+    """
+    if not RAW_PARQUET.exists() or not ACTIONS_PARQUET.exists():
+        raise SystemExit(f"reprocess input missing: {RAW_PARQUET} / {ACTIONS_PARQUET}")
+    raw = pd.read_parquet(RAW_PARQUET)
+    frames: dict[str, pd.DataFrame] = {}
+    for tk in ns["UNIVERSE"] + ns["BENCHMARKS"]:
+        df = (
+            raw[raw["ticker"] == tk]
+            .drop(columns=["ticker", "universe_version", "data_version"])
+            .sort_index()
+        )
+        if df.empty:
+            raise SystemExit(f"reprocess: no saved rows for {tk}")
+        frames[tk] = df
+
+    actions: dict[str, list[dict]] = {}
+    act = pd.read_parquet(ACTIONS_PARQUET)
+    for tk, grp in act.groupby("ticker"):
+        evs: list[dict] = []
+        for _, row in grp.iterrows():
+            dv = row["date"]
+            date_iso = dv.date().isoformat() if hasattr(dv, "date") else str(dv)
+            e: dict = {"type": str(row["type"]), "date": date_iso}
+            for col in ("amount", "numerator", "denominator"):
+                if pd.notna(row[col]):
+                    e[col] = float(row[col])
+            if pd.notna(row["ratio"]):
+                e["ratio"] = str(row["ratio"])
+            evs.append(e)
+        actions[tk] = evs
+
+    def stub_chart(ticker, tries=3):
+        return None, "reprocess:chart-skipped"
+
+    def stub_yf(ticker, tries=2):
+        ns["ACTIONS"][ticker] = [dict(e) for e in actions.get(ticker, [])]
+        return frames[ticker].copy(), "reprocess:saved"
+
+    def stub_stooq(ticker, tries=2):
+        return None, "reprocess:not-called"
+
+    ns["fetch_chart_api"] = stub_chart
+    ns["fetch_yfinance"] = stub_yf
+    ns["fetch_stooq"] = stub_stooq
+    ns["__stub_frames__"] = frames
+
+
 # ---------------------------------------------------------------------------
 # Notebook loading + execution
 # ---------------------------------------------------------------------------
@@ -222,7 +299,7 @@ def run_notebook() -> dict:
         shutil.rmtree(SCRATCH)
     (SCRATCH / "drive").mkdir(parents=True)
 
-    if not LIVE:
+    if MODE == "dry":
         # Fake yfinance (network module) before Cell 1 imports it.
         import types
 
@@ -231,14 +308,26 @@ def run_notebook() -> dict:
         fake_yf.Ticker = lambda *a, **k: None
         sys.modules["yfinance"] = fake_yf
 
-    ns: dict = {"__name__": "__live_run__" if LIVE else "__dry_run__"}
+    os.environ["NQ_RUN_CONTEXT"] = {
+        "dry": "dry_run (stub data)",
+        "live": "local_live (dry_run_notebook.py --live, real network)",
+        "reprocess": (
+            "local_reprocess (from saved prices_v001.parquet; frozen "
+            "acquisition 2026-10-16)"
+        ),
+    }[MODE]
+
+    ns: dict = {"__name__": f"__{MODE}_run__"}
     for i, c in enumerate(code_cells):
         src = transform("".join(c["source"]))
-        if "def fetch_chart_api" in src and not LIVE:
+        if "def fetch_chart_api" in src and MODE in ("dry", "reprocess"):
             marker = 'report = {"tickers": {}, "failures": [], "sources": {}}'
             head, tail = src.split(marker, 1)
             exec_cell(ns, head, f"cell{i}-fetchers")
-            install_stub_fetchers(ns)
+            if REPROCESS:
+                install_reprocess_fetchers(ns)
+            else:
+                install_stub_fetchers(ns)
             exec_cell(ns, marker + tail, f"cell{i}-acquisition")
         else:
             exec_cell(ns, src, f"cell{i}")
@@ -444,6 +533,40 @@ def audit(ns: dict) -> None:
         "every row has 4 factor contributions",
         all(len(c.get("factor_contributions", {})) == 4 for c in fund["constituents"]),
     )
+    # Direction regressions for the signed-rank composite (fixed 2026-10-16:
+    # the old zrank inverted momentum, drawdown and diversification).
+    cols = fund["constituents"]
+    mom_hi = max(cols, key=lambda c: c["momentum_12_1"])
+    check(
+        "momentum: highest 12-1 gets a positive contribution",
+        mom_hi["factor_contributions"]["momentum"] > 0,
+        f"{mom_hi['ticker']} {mom_hi['factor_contributions']['momentum']}",
+    )
+    vol_hi = max(cols, key=lambda c: c["vol_3m"])
+    check(
+        "volatility: highest vol gets a negative contribution",
+        vol_hi["factor_contributions"]["volatility"] < 0,
+        f"{vol_hi['ticker']} {vol_hi['factor_contributions']['volatility']}",
+    )
+    dd_lo = min(cols, key=lambda c: c["drawdown_52w"])
+    check(
+        "drawdown: deepest drawdown gets a negative contribution",
+        dd_lo["factor_contributions"]["drawdown"] < 0,
+        f"{dd_lo['ticker']} {dd_lo['factor_contributions']['drawdown']}",
+    )
+    corr_lo = min(cols, key=lambda c: c["avg_corr"])
+    check(
+        "diversification: lowest avg corr gets a positive contribution",
+        corr_lo["factor_contributions"]["diversification"] > 0,
+        f"{corr_lo['ticker']} {corr_lo['factor_contributions']['diversification']}",
+    )
+    check(
+        "composite = sum of contributions",
+        all(
+            abs(c["composite_score"] - sum(c["factor_contributions"].values())) < 1e-9
+            for c in cols
+        ),
+    )
 
     print("\n--- backtest ------------------------------------------------------")
     series = back["series"]
@@ -474,6 +597,30 @@ def audit(ns: dict) -> None:
         0.0 <= back["attribution"]["r_squared"] <= 1.0,
         f"r2={back['attribution']['r_squared']}",
     )
+    # Formula regressions (fixed 2026-10-16): Sharpe is annualised mean / vol
+    # (rf 0), and worst_30d is a 30-trading-day cumulative return - not a
+    # rolling mean of daily returns, which understated the worst month ~15x.
+    for k, arr in series.items():
+        r = np.diff(np.log(np.asarray(arr, float)))
+        mu = float(np.mean(r) * 252)
+        vol = float(np.std(r, ddof=1) * math.sqrt(252))
+        exp_sh = round(mu / vol, 3) if vol > 0 else 0.0
+        p = back["performance"][k]
+        check(
+            f"{k}: sharpe == annualised mean / vol",
+            abs(p["sharpe"] - exp_sh) < 1e-9,
+            f"{p['sharpe']} vs {exp_sh}",
+        )
+        w30 = (
+            np.convolve(r, np.ones(30), mode="valid")
+            if len(r) >= 30
+            else np.array([r.sum()])
+        )
+        check(
+            f"{k}: worst_30d == min 30-day cumulative return",
+            abs(p["worst_30d"] - float(np.expm1(w30.min()))) < 5e-4,
+            f"{p['worst_30d']}",
+        )
     check(
         "yearly rows present", len(back["yearly"]) >= 6, f"{len(back['yearly'])} years"
     )
@@ -520,8 +667,13 @@ def audit(ns: dict) -> None:
         f"{len(run['validation']['checks'])} checks",
     )
     check("no acquisition failures", run["failures"] == [])
+    check(
+        "run context recorded",
+        isinstance(run.get("run_context"), str) and bool(run["run_context"]),
+        str(run.get("run_context", "")),
+    )
 
-    if not LIVE:
+    if MODE == "dry":
         print("\n--- fallback shape regression (tz-aware frames) -----------------")
         for tk in sorted(YF_FALLBACK_STUBS):
             t = ns["report"]["tickers"].get(tk, {})
@@ -571,8 +723,9 @@ def audit(ns: dict) -> None:
 
 
 def install_bundle(ns: dict) -> None:
-    """LIVE mode: install the audited bundle into dashboard/src/data and copy
-    the Parquet artifacts to a stable local folder for the Drive upload."""
+    """Real modes (--live / --from-parquet): install the audited bundle into
+    dashboard/src/data and copy the Parquet artifacts to a stable local folder
+    for the Drive upload."""
     local = Path(ns["LOCAL_DATA"])
     FIXTURE_DATA.mkdir(parents=True, exist_ok=True)
     copied = []
@@ -607,9 +760,14 @@ def install_bundle(ns: dict) -> None:
 def main() -> int:
     print("=" * 72)
     print(
-        "LIVE acquisition — real fetchers, real network"
-        if LIVE
-        else "dry-run rehearsal — synthetic fetchers, real processing code"
+        {
+            "live": "LIVE acquisition — real fetchers, real network",
+            "reprocess": (
+                "REPROCESS — rebuilding from the saved frozen acquisition "
+                f"({RAW_PARQUET.name}; no network)"
+            ),
+            "dry": "dry-run rehearsal — synthetic fetchers, real processing code",
+        }[MODE]
     )
     print("=" * 72)
     ns = run_notebook()
@@ -617,19 +775,15 @@ def main() -> int:
     print("auditing the emitted bundle")
     print("=" * 72)
     audit(ns)
+    label = {"live": "LIVE RUN", "reprocess": "REPROCESS RUN", "dry": "DRY RUN"}[MODE]
     print("\n" + "=" * 72)
     if FAILURES:
-        print(
-            f"{'LIVE RUN' if LIVE else 'DRY RUN'} FAILED — "
-            f"{len(FAILURES)} of {_checks} checks failed:"
-        )
+        print(f"{label} FAILED — {len(FAILURES)} of {_checks} checks failed:")
         for f in FAILURES:
             print("  -", f)
         return 1
-    print(
-        f"{'LIVE RUN' if LIVE else 'DRY RUN'} PASSED — {_checks}/{_checks} checks green."
-    )
-    if LIVE:
+    print(f"{label} PASSED — {_checks}/{_checks} checks green.")
+    if MODE in ("live", "reprocess"):
         install_bundle(ns)
     else:
         print(f"stub bundle (for UI experiments only): {SCRATCH / 'dashboard_data'}")

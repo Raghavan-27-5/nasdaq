@@ -124,10 +124,17 @@ overwritten** (`WORKTREE.md` §4).
 from google.colab import drive
 drive.mount('/content/drive')
 
+import os
+
 SPEC_VERSION     = "0.1.0"
 UNIVERSE_VERSION = "0.1.0"
 DATA_VERSION     = "v001"
 NOTEBOOK_NAME    = "nasdaq_ai_quant_acquire_v002.ipynb"
+
+# Execution context for provenance. "colab_notebook" on a canonical Colab run;
+# local harnesses set NQ_RUN_CONTEXT explicitly (dry / live / reprocess) so the
+# stored manifest can never claim a Colab run that did not happen.
+RUN_CONTEXT = os.environ.get("NQ_RUN_CONTEXT", "colab_notebook")
 
 # Frozen research window. END is inclusive per spec, but yfinance treats `end`
 # as EXCLUSIVE - so we request one day later and assert the result later.
@@ -965,7 +972,12 @@ def build_fund_rows():
     for tk in UNIVERSE:
         lv = np.array(levels[tk])
         r  = np.array(returns[tk][1:])
-        mom = float(lv[-1]/lv[-253] - 1) if len(lv) > 253 else float(lv[-1]/lv[0]-1)
+        # 12-1 momentum: trailing 12 months EXCLUDING the most recent month
+        # (Jegadeesh-Titman; skips the ~21-trading-day short-term reversal
+        # window). The previous line computed plain 12-month momentum while
+        # the field name and the factor definition both said 12-1.
+        mom = (float(lv[-21]/lv[-253] - 1) if len(lv) > 253
+               else float(lv[-1]/lv[0] - 1))
         peak = float(np.max(lv[-252:]))
         ac = float(np.mean([corr[idx[tk]][j] for j in range(len(UNIVERSE)) if j != idx[tk]]))
         meta = UNIVERSE_META.get(tk, {})
@@ -981,18 +993,25 @@ def build_fund_rows():
             "drawdown_52w": round(float(lv[-1]/peak - 1), 4), "avg_corr": round(ac, 4),
             "beta_qqq": per_ticker[tk]["beta_qqq"],
         })
-    def zrank(vals, higher_better):
-        order = sorted(range(len(vals)), key=lambda i: vals[i], reverse=higher_better)
+    def zrank(vals):
+        # Signed rank in [-1, +1]: +1 for the HIGHEST raw value, -1 for the
+        # lowest. Direction lives in the WEIGHT SIGN, never in the rank.
+        # (The previous version flipped the rank inside zrank AND carried a
+        # direction flag; the two contradicted each other and silently
+        # INVERTED momentum, drawdown and diversification - found by
+        # recomputing the emitted contributions from the raw Parquet on
+        # 2026-10-16, fixed here, regression-checked in dry_run_notebook.py.)
+        order = sorted(range(len(vals)), key=lambda i: vals[i], reverse=True)
         z = [0.0]*len(vals)
         for pos, i in enumerate(order):
-            z[i] = 2*pos/(len(vals)-1) - 1
+            z[i] = 1 - 2*pos/(len(vals)-1)
         return z
-    cols = {"momentum": ("momentum_12_1", True, 0.40),
-            "volatility": ("vol_3m", False, -0.20),
-            "drawdown": ("drawdown_52w", True, 0.15),
-            "diversification": ("avg_corr", False, 0.25)}
-    for key, (fld, hb, w) in cols.items():
-        zs = zrank([r0[fld] for r0 in rows], hb)
+    cols = {"momentum": ("momentum_12_1", 0.40),
+            "volatility": ("vol_3m", -0.20),
+            "drawdown": ("drawdown_52w", 0.15),
+            "diversification": ("avg_corr", -0.25)}
+    for key, (fld, w) in cols.items():
+        zs = zrank([r0[fld] for r0 in rows])
         for i, r0 in enumerate(rows):
             r0.setdefault("factor_contributions", {})[key] = round(zs[i]*w, 5)
     for r0 in rows:
@@ -1014,15 +1033,22 @@ def perf(series):
     yrs = (len(s)-1)/252.0
     cagr = (s[-1]/s[0])**(1/yrs) - 1
     vol  = float(np.std(r, ddof=1)*math.sqrt(252))
+    mu   = float(np.mean(r)*252)            # annualised arithmetic mean (rf = 0)
     dn   = np.minimum(r, 0.0)
     srt  = float(np.std(dn, ddof=1)*math.sqrt(252))
-    roll = np.convolve(r, np.ones(21)/21, mode="valid") if len(r) >= 21 else r
+    # Worst 30-TRADING-DAY cumulative return. (The previous formula took the
+    # minimum of a 21-day rolling MEAN of daily log returns, understating the
+    # worst month roughly 15x; caught by recomputation from Parquet, 2026-10-16.)
+    w30 = (np.convolve(r, np.ones(30), mode="valid") if len(r) >= 30
+           else np.array([float(np.sum(r))]))
     return {
         "cagr": round(float(cagr), 4), "vol": round(vol, 4),
-        "sharpe": round(float(cagr/vol), 3) if vol > 0 else 0.0,
-        "sortino": round(float(cagr/srt), 3) if srt > 0 else 0.0,
+        # Sharpe (rf 0) = annualised mean / annualised vol. CAGR/vol (the
+        # previous convention) is not a Sharpe ratio and overstated it.
+        "sharpe": round(mu/vol, 3) if vol > 0 else 0.0,
+        "sortino": round(mu/srt, 3) if srt > 0 else 0.0,
         "max_dd": round(max_dd(s), 4),
-        "worst_30d": round(float(roll.min()), 4),
+        "worst_30d": round(float(np.expm1(w30.min())), 4),
         "final": round(float(s[-1]), 2),
     }
 
@@ -1096,13 +1122,13 @@ write("market.json", {
 write("fundamentals.json", {
     "synthetic": False,
     "disclaimer": "Market-derived factors computed from real prices. Fundamental factors (P/E, growth, FCF, revisions, AI exposure) are NOT YET AVAILABLE - see Phase 1.",
-    "method": "Composite over available market-derived factors only, rank-standardised to [-1,1] and renormalised. Fundamental factors pending Phase 1 sourced dataset.",
+    "method": "Composite over available market-derived factors only: signed rank per factor in [-1,1], direction carried by the weight sign (volatility and diversification enter with negative weights), summed. Fundamental factors pending Phase 1 sourced dataset.",
     "fundamental_factors_pending": True,
     "factor_defs": [
         {"key": "momentum", "label": "12-1 month momentum", "unit": "ratio", "weight": 0.40},
         {"key": "volatility", "label": "3m realised vol, inverted", "unit": "ratio", "weight": -0.20},
         {"key": "drawdown", "label": "Drawdown from 52w high", "unit": "ratio", "weight": 0.15},
-        {"key": "diversification", "label": "Avg correlation, inverted", "unit": "ratio", "weight": 0.25},
+        {"key": "diversification", "label": "Avg correlation, inverted", "unit": "ratio", "weight": -0.25},
     ],
     "as_of": dates[-1], "constituents": FUND_ROWS,
 })
@@ -1273,6 +1299,7 @@ write("manifest.json", {
         "sources": "yahoo_chart_api (primary) + yfinance (fallback) + stooq (PoW disabled)",
         "validation": report["validation"]["status"],
         "trading_days": n,
+        "run_context": RUN_CONTEXT,
     },
 })
 
@@ -1282,6 +1309,7 @@ run_manifest = {
     "spec_version": SPEC_VERSION, "universe_version": UNIVERSE_VERSION,
     "notebook": NOTEBOOK_NAME,
     "executed_at": EXECUTED_AT,
+    "run_context": RUN_CONTEXT,
     "window": {"start": START, "end_inclusive": END_INCLUSIVE},
     "price_convention": "adjusted close (split and dividend adjusted)",
     "trading_days": n,

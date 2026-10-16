@@ -23,7 +23,6 @@ import { nf, nfInt, pct, pctSigned, ratioSigned, humanise, bn, money } from '@/l
 type Range = '3m' | '1y' | '3y' | 'all'
 
 const RANGE_DAYS: Record<Range, number> = { '3m': 63, '1y': 252, '3y': 756, all: 99999 }
-const RANGE_YEARS: Record<Range, number> = { '3m': 63 / 252, '1y': 1, '3y': 3, all: 6.72 }
 
 export function StockIntelligence() {
   const { ticker, selectTicker, navigate } = useApp()
@@ -52,8 +51,6 @@ export function StockIntelligence() {
     return { dates: d, px: p, bench: b }
   }, [full, ticker, range, cmp])
 
-  const years = RANGE_YEARS[range]
-
   const perf = useMemo(() => {
     const clean = px.filter((v): v is number => v !== null)
     if (clean.length < 2) return null
@@ -68,16 +65,20 @@ export function StockIntelligence() {
       if (v > peak) peak = v
       mdd = Math.min(mdd, v / peak - 1)
     }
+    // Annualise over the OBSERVED window, not the nominal range: truncated
+    // names (CRWV, PLTR) can carry far less history than the selector implies.
+    const years = Math.max((clean.length - 1) / 252, 1 / 252)
     const cagr = (1 + total) ** (1 / years) - 1
     return {
       total,
       cagr,
       vol,
-      sharpe: vol > 0 ? cagr / vol : 0,
+      // Sharpe (rf 0) = annualised arithmetic mean / annualised vol.
+      sharpe: vol > 0 ? (mean * 252) / vol : 0,
       mdd,
       rel: total - (bench.filter((v): v is number => v !== null).slice(-1)[0] / bench.filter((v): v is number => v !== null)[0] - 1),
     }
-  }, [px, bench, years])
+  }, [px, bench])
 
   const priceOption = useMemo(
     () =>
