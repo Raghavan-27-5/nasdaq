@@ -66,3 +66,7 @@ dashboard/*.tsbuildinfo
 
 # Local live-acquisition artifacts (canonical copy goes to Drive)
 artifacts/acquisition_v001/
+
+# Local training artifacts (canonical copies go to Drive:
+# 05_features / 06_targets / 07_models / 08_predictions)
+artifacts/training_v001/

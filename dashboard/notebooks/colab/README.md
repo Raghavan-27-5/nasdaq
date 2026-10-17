@@ -1,4 +1,4 @@
-# Phase 3 — Real Market Data Acquisition (Colab)
+# Colab Notebooks — Data Acquisition (Phase 3) + Model Training (Phases 5/6)
 
 `nasdaq_ai_quant_acquire_v002.ipynb` downloads **real** EOD market data for the locked
 20-name universe plus QQQ / SOXX / SPY, validates it against the project's quality gates,
@@ -225,12 +225,70 @@ returning no corporate actions. The bundle is installed in `dashboard/src/data/`
 Parquet artifacts are staged in `artifacts/acquisition_v001/` for the Drive upload. Full
 record: PHASE_LOG D0024, `artifacts/acquisition_v001/live_run.log`.
 
-## Regenerating
+## Phase 5/6 — Training notebook (`nasdaq_ai_quant_train_v001.ipynb`)
 
-`build_notebook.py` assembles the notebook from cell sources — edit that, not the JSON:
+`nasdaq_ai_quant_train_v001.ipynb` (builder: `build_train_notebook.py`) turns the frozen
+clean panel into the project's first real supervised-learning artifacts. It is the producer
+of the **pre-registered** artifact names already referenced by the dashboard manifest and
+`models.json`:
+
+```
+NasdaqAIQuant/
+├── 05_features/features_v003.parquet          + feature_meta_v003.json (formulas, availability rule)
+├── 06_targets/targets_v002.parquet            long schema, per-row label_start / label_end
+├── 07_models/training_report_v001.json        per-target metrics, folds, gain importance
+├── 08_predictions/predictions_v007.parquet    OOS walk-forward predictions
+└── 12_dashboard/runs/run_manifest_train_v001.json   provenance + SHA-256 per artifact
+```
+
+**Prerequisite.** Upload the acquisition outputs first (`03_raw/prices_v001.parquet` and
+`04_clean/clean_prices_v001.parquet`); the notebook stops immediately if they are missing.
+
+**Protocol.** Expanding-window walk-forward, quarterly refit (63 trading days) starting
+2022-01-03 — the dashboard's out-of-sample epoch. Per-target purge (training labels must
+end before the validation window opens, by the target horizon) plus a 5-day embargo; a
+rolling 126-trading-day validation window drives early stopping and is never test data.
+Seven separate estimators (one per target) with pre-registered parameters; the OOS rows
+are never read by fitting, tuning or stopping. Decision convention: daily EOD close
+(`RESEARCH_PROTOCOL.md` L21). Features: 18 trailing price/volume columns (returns,
+momentum 12-1, realised vols, trend ratios, RSI-14, MACD histogram, volume ratio,
+QQQ-relative return/beta, date-local cross-sectional ranks) — all computed from data
+through close *t* only.
+
+**What becomes real.** ML Lab IC, ICIR, hit rate, walk-forward folds, feature importance.
+**Still synthetic.** ML portfolio curve, optimised weights, net-of-cost strategy stats
+(Phase 8–10); SHAP (Phase 7; gain importance only here); fundamental factors (Phase 1).
+
+**Validation.** 24 hard-failing contract checks — truncated-history feature recomputation,
+no pre-listing synthesis (CRWV all-NaN before 2025-03-28), label_end alignment, split
+geometry + fold coverage on every fold, deterministic refit equality, independent IC
+recomputation, and a proof that the only unpredicted label rows are pre-warmup rows
+(<5 defined features). A failing run never writes its reporting bundle.
+
+**Verify without Colab** — no LightGBM is installed and nothing is trained locally
+(`AGENTS.md` §2); a deterministic stub booster exercises the same code path on the real
+frozen Parquet:
 
 ```bash
-python3 dashboard/notebooks/colab/build_notebook.py   # regenerates the .ipynb
+/tmp/opencode/venv/bin/python dashboard/notebooks/colab/dry_run_train.py
+```
+
+Exit code 0 = harness audits + all in-notebook checks pass. Current status: **24/24 checks
+green** on the frozen acquisition. The canonical Colab run executed **2026-10-17**
+(`colab_notebook` context, engine LightGBM, 24/24 checks); its bundle is archived at
+`artifacts/training_v001/` (local, git-ignored — the Drive copies are canonical). Result
+summary: vol targets strongly predictable (vol_21d IC +0.52); return/direction targets show
+no out-of-sample edge with price-only v1 features — the honest null is recorded in
+`PHASE_LOG.md` D0030. Wiring `predictions_v007` / `training_report_v001` into the dashboard
+is a separate reviewed change.
+
+## Regenerating
+
+Both notebooks are assembled from cell sources — edit the builders, not the JSON:
+
+```bash
+python3 dashboard/notebooks/colab/build_notebook.py        # acquisition v002
+python3 dashboard/notebooks/colab/build_train_notebook.py  # training v001
 ```
 
 `nasdaq_ai_quant_acquire_v001.ipynb` is superseded and has been removed; do not resurrect
