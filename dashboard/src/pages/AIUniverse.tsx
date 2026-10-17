@@ -14,8 +14,9 @@ import {
   TRUNCATED,
   historyStart,
   RESEARCH_END,
+  currentSnapshot,
 } from '@/lib/data'
-import type { FundamentalRow } from '@/lib/data'
+import type { FundamentalRow, SnapshotRow } from '@/lib/data'
 import { useApp } from '@/lib/store'
 import { fundamentalFactorsPending } from '@/lib/provenance'
 import { nf, pct, pctSigned, humanise, bn } from '@/lib/format'
@@ -88,7 +89,7 @@ export function AIUniverse() {
       <button
         type="button"
         onClick={() => onSort(k)}
-        className="inline-flex items-center gap-1 whitespace-nowrap"
+        className="inline-flex items-center gap-1 whitespace-nowrap uppercase"
       >
         {label}
         {sortKey === k && <span aria-hidden>{sortDir === 'asc' ? '↑' : '↓'}</span>}
@@ -171,10 +172,15 @@ export function AIUniverse() {
               f.market_cap_bn,
             ] as [number, number, number],
           })),
-          symbolSize: (d: unknown) => {
+          symbolSize: (_v: unknown, p: unknown) => {
             // Market caps span ~$150bn-$3.8tn; sqrt keeps the size readable
             // instead of producing 170px blobs that merge together.
-            const v = ((d as { value?: number[] }).value ?? [])[2] ?? 0
+            // ECharts invokes this as (value, params): the raw item (with
+            // value[2] = market cap) is on params.data, not on the first
+            // argument (same NaN-size defect as the Risk beta map, caught
+            // in the 2026-10-16 visual QA pass).
+            const item = (p as { data?: { value?: number[] } } | undefined)?.data
+            const v = item?.value?.[2] ?? 0
             return 6 + Math.sqrt(Math.max(v, 0)) * 0.36
           },
           itemStyle: {
@@ -205,13 +211,23 @@ export function AIUniverse() {
   }, [])
 
   const stats = useMemo(() => {
-    const cs = fundamentals.constituents
-    const nums = (pick: (f: FundamentalRow) => number | null | undefined): number[] =>
+    // Header metrics come from the current-state snapshot (sourced 2026-10-17):
+    // this build's fundamentals.json carries market-derived factors only, and
+    // the point-in-time sourced dataset is Phase 1. Per-name values, bases and
+    // the exposure rubric live in current_snapshot.json. Descriptive only -
+    // never joined to historical or predictive computation.
+    const cs = currentSnapshot.constituents
+    const nums = (pick: (f: SnapshotRow) => number | null | undefined): number[] =>
       cs
         .map(pick)
         .filter((v): v is number => v !== null && v !== undefined && Number.isFinite(v))
-    const median = (xs: number[]): number | null =>
-      xs.length === 0 ? null : [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]
+    const median = (xs: number[]): number | null => {
+      if (xs.length === 0) return null
+      const s = [...xs].sort((a, b) => a - b)
+      const m = Math.floor(s.length / 2)
+      // Strict median: mean of the two middle values when n is even.
+      return s.length % 2 === 1 ? s[m] : (s[m - 1] + s[m]) / 2
+    }
     const mean = (xs: number[]): number | null =>
       xs.length === 0 ? null : xs.reduce((s, v) => s + v, 0) / xs.length
     return {
@@ -259,6 +275,14 @@ export function AIUniverse() {
           <StatTileInPanel label="Mean AI exposure" value={pct(stats.aiAvg, 0)} />
           <StatTileInPanel label="Mean capex exposure" value={pct(stats.capexAvg, 0)} />
         </div>
+
+        <p className="px-0.5 text-3xs leading-relaxed text-fg-mute">
+          Snapshot metrics ({currentSnapshot.as_of}): market cap and forward P/E from Yahoo Finance;
+          AI and capex exposure from a manual research pass (per-name bases and rubric in{' '}
+          <span className="font-mono">current_snapshot.json</span>). Descriptive current state only -
+          not point-in-time, never used in predictive computation; the Phase-1 sourced fundamentals
+          dataset remains pending.
+        </p>
 
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_340px]">
           <Panel
@@ -328,7 +352,7 @@ export function AIUniverse() {
                           )}
                         </div>
                       </td>
-                      <td className="max-w-[168px] truncate text-2xs text-fg-dim">
+                      <td className="max-w-[168px] truncate text-2xs text-fg-dim" title={humanise(f.ai_category)}>
                         {humanise(f.ai_category)}
                       </td>
                       <td className="num">

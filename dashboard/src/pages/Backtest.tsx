@@ -109,7 +109,16 @@ export function Backtest() {
         const from = dates.indexOf(idx[0])
         const to = dates.indexOf(idx[idx.length - 1])
         const dd = drawdownSeries(backtest.series.ML_PORTFOLIO.slice(from, to + 1))
-        return { year: y, row, dd: Math.min(...dd), partial: y === oosYear }
+        // "YTD" only when the out-of-sample window genuinely starts mid-year.
+        // oos_start on the first trading day of the year means the row covers
+        // the full year (label defect flagged by the 2026-10-16 visual QA).
+        const firstOfYear = dates.find((x) => x.startsWith(y)) ?? dates[0]
+        return {
+          year: y,
+          row,
+          dd: Math.min(...dd),
+          partial: y === oosYear && backtest.oos_start !== firstOfYear,
+        }
       })
       .filter(Boolean) as {
       year: string

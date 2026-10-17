@@ -193,7 +193,12 @@ export function PortfolioOptimizer() {
                 </thead>
                 <tbody>
                   {rows.map((r) => {
-                    const capped = r.unconstrained > 0.12
+                    // "capped" is meaningful for the constrained solution only:
+                    // it marks names whose unconstrained demand breached the
+                    // 12% mandate and were therefore held at the cap. Showing
+                    // it in the unconstrained / equal-weight views implied the
+                    // cap was applied there too (visual QA, 2026-10-16).
+                    const capped = sol === 'constrained' && r.unconstrained > 0.12
                     return (
                       <tr
                         key={r.t}
@@ -226,7 +231,12 @@ export function PortfolioOptimizer() {
                         <td className="num text-fg-dim">{nf(r.cctr, 3)}</td>
                         <td className="num">
                           {capped ? (
-                            <Badge tone="warn">capped</Badge>
+                            <Badge
+                              tone="warn"
+                              title="Unconstrained demand exceeded the 12% single-name cap; the constrained solution holds this name at the cap."
+                            >
+                              capped
+                            </Badge>
                           ) : (
                             <span className="text-fg-mute">—</span>
                           )}
@@ -239,7 +249,7 @@ export function PortfolioOptimizer() {
             </div>
             {sol === 'unconstrained' && (
               <p className="border-t border-ink-700 px-4 py-2.5 text-2xs leading-relaxed text-sig-warn">
-                The unconstrained solution concentrates far beyond the mandate:{' '}
+                The unconstrained solution concentrates beyond the mandate:{' '}
                 {pct(Math.max(...rows.map((r) => r.unconstrained)), 1)} in a single name versus a 12%
                 cap. This is the cost of constraints, shown rather than asserted.
               </p>
@@ -248,13 +258,13 @@ export function PortfolioOptimizer() {
 
           <div className="flex flex-col gap-3">
             <Panel title="Weight profile" subtitle="Sorted by target weight" className="flex-1">
-              <EChart option={weightOption} height={262} />
+              <EChart option={weightOption} height={400} />
             </Panel>
 
-            <Panel title="Sector concentration" subtitle="Caps: SEMI 34% · HYPER 26% · SOFT 26%">
+            <Panel title="Sector concentration" subtitle="Caps: 34% per sector">
               <div className="space-y-2.5">
                 {(['SEMI', 'HYPER', 'SOFT'] as const).map((s) => {
-                  const cap = s === 'SEMI' ? 0.34 : 0.26
+                  const cap = 0.34 // per-sector mandate cap (fixture revision 2026-10-16: all three sectors 34%; previous 34/26/26 caps summed to 86% and made full investment infeasible)
                   const v = sectorTotals[s] ?? 0
                   const over = v > cap
                   return (

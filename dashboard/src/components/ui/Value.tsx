@@ -89,8 +89,24 @@ export function Delta({
   className?: string
   arrow?: boolean
 }) {
-  const isNum = typeof children === 'number' || (typeof children === 'string' && children.startsWith('+'))
-  const t = tone === 'auto' ? (isNum && typeof children === 'number' ? dir(children) : 'flat') : tone
+  // Sign inference: numbers via `dir`; formatted strings via their explicit
+  // sign prefix ("+x%"/"-x%"/"−x%"). Previously every string child rendered
+  // the flat-dash glyph in neutral colour, so signed figures such as
+  // "+68.5%" showed a leading dash that read as a minus sign (visual QA
+  // finding, 2026-10-16).
+  const s = typeof children === 'string' ? children.trim() : null
+  const t =
+    tone !== 'auto'
+      ? tone
+      : typeof children === 'number'
+        ? dir(children)
+        : s === null
+          ? 'flat'
+          : s.startsWith('+')
+            ? 'pos'
+            : s.startsWith('-') || s.startsWith('−')
+              ? 'neg'
+              : 'flat'
   return (
     <span
       className={clsx(
@@ -103,8 +119,12 @@ export function Delta({
     >
       {arrow && (
         <svg width="7" height="7" viewBox="0 0 8 8" aria-hidden className="shrink-0">
+          {/* Up-triangle for positive, down for negative. The two paths were
+              swapped since the component was written: with the tone fix above
+              resolving real signs, positive deltas rendered a DOWN arrow and
+              negative deltas an UP arrow (reported by the owner, 2026-10-17). */}
           <path
-            d={t === 'neg' ? 'M4 0.5 L7.5 7 L0.5 7 Z' : t === 'pos' ? 'M4 7.5 L0.5 1 L7.5 1 Z' : 'M0.5 3.5 H7.5 V4.5 H0.5 Z'}
+            d={t === 'pos' ? 'M4 0.5 L7.5 7 L0.5 7 Z' : t === 'neg' ? 'M4 7.5 L0.5 1 L7.5 1 Z' : 'M0.5 3.5 H7.5 V4.5 H0.5 Z'}
             fill="currentColor"
           />
         </svg>

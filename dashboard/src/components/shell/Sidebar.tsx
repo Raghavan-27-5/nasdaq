@@ -65,8 +65,10 @@ export function Sidebar() {
             />
           </svg>
           <div className="min-w-0">
-            <div className="truncate text-[12.5px] font-semibold leading-tight tracking-tight text-fg-hi">
-              Nasdaq AI Quant
+            {/* Owner rename, 2026-10-17: the brand wraps to two lines rather
+                than truncating inside the 208px rail. */}
+            <div className="text-[11.5px] font-semibold leading-tight tracking-tight text-fg-hi">
+              NASDAQ AI EQUITIES PORTFOLIO
             </div>
             <div className="truncate text-3xs uppercase tracking-[0.13em] text-fg-mute">
               Research Terminal

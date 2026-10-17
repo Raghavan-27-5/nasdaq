@@ -15,7 +15,9 @@ import {
   portfolio,
   seriesFor,
   historyStart,
+  currentSnapshot,
 } from '@/lib/data'
+import type { SnapshotRow } from '@/lib/data'
 import { fundamentalFactorsPending, fundamentalsStatus, marketIsReal, riskBookIsPlaceholder, riskIsReal } from '@/lib/provenance'
 import { useApp } from '@/lib/store'
 import { nf, nfInt, pct, pctSigned, ratioSigned, humanise, bn, money } from '@/lib/format'
@@ -23,6 +25,11 @@ import { nf, nfInt, pct, pctSigned, ratioSigned, humanise, bn, money } from '@/l
 type Range = '3m' | '1y' | '3y' | 'all'
 
 const RANGE_DAYS: Record<Range, number> = { '3m': 63, '1y': 252, '3y': 756, all: 99999 }
+
+/** Current-state snapshot lookup for the descriptive fundamental-snapshot panel (D0028). */
+const SNAPSHOT: Record<string, SnapshotRow> = Object.fromEntries(
+  currentSnapshot.constituents.map((s) => [s.ticker, s]),
+)
 
 export function StockIntelligence() {
   const { ticker, selectTicker, navigate } = useApp()
@@ -32,6 +39,12 @@ export function StockIntelligence() {
 
   const meta = TICKER_META[ticker]
   const f = FUND[ticker]
+  const snap: SnapshotRow | undefined = SNAPSHOT[ticker]
+  // Snapshot-sourced descriptive fields (D0028). Em dash when absent.
+  const snapCap = snap?.market_cap_bn ?? null
+  const snapPe = snap?.fwd_pe ?? null
+  const snapAi = snap?.ai_revenue_exposure ?? null
+  const snapCx = snap?.aicapex_exposure ?? null
   const r = risk.per_ticker[ticker]
 
   const full = useMemo(() => seriesFor(ticker), [ticker])
@@ -235,7 +248,11 @@ export function StockIntelligence() {
 
           <Panel
             title="Period statistics"
-            subtitle={`Trailing ${range.toUpperCase()} · ${marketIsReal ? 'computed from real adjusted prices' : 'synthetic prices'}`}
+            subtitle={
+              market.start_idx[ticker] > 0
+                ? `Since first trade (${historyStart(ticker)}) · ${marketIsReal ? 'computed from real adjusted prices' : 'synthetic prices'}`
+                : `Trailing ${range.toUpperCase()} · ${marketIsReal ? 'computed from real adjusted prices' : 'synthetic prices'}`
+            }
             provenance={marketIsReal ? 'real' : 'synthetic'}
           >
             {!perf ? (
@@ -315,8 +332,8 @@ export function StockIntelligence() {
               {(
                 [
                   ['Price', money(f.price), 'flat'],
-                  ['Market cap', bn(f.market_cap_bn), 'flat'],
-                  ['Forward P/E', f.fwd_pe === null || f.fwd_pe === undefined ? '—' : `${nf(f.fwd_pe, 1)}x`, 'flat'],
+                  ['Market cap', bn(snapCap), 'flat'],
+                  ['Forward P/E', snapPe === null ? '—' : `${nf(snapPe, 1)}x`, 'flat'],
                   [
                     'Revenue growth',
                     f.revenue_growth === null || f.revenue_growth === undefined
@@ -340,8 +357,8 @@ export function StockIntelligence() {
                         ? 'pos'
                         : 'neg',
                   ],
-                  ['AI revenue exposure', pct(f.ai_revenue_exposure, 0), 'flat'],
-                  ['AI capex exposure', pct(f.aicapex_exposure, 0), 'flat'],
+                  ['AI revenue exposure', pct(snapAi, 0), 'flat'],
+                  ['AI capex exposure', pct(snapCx, 0), 'flat'],
                 ] as const
               ).map(([k, v, tone]) => (
                 <div key={k} className="flex items-baseline justify-between gap-3">
@@ -358,8 +375,9 @@ export function StockIntelligence() {
             </div>
             {fundamentalFactorsPending ? (
               <p className="mt-3 border-t border-ink-700 pt-2 text-2xs leading-relaxed text-fg-mute">
-                Valuation, growth, FCF and revision fields require the Phase-1 sourced dataset —
-                shown as an em dash until then.
+                Market cap, forward P/E and exposure fields are the current-state snapshot
+                (2026-10-17) — descriptive only, not point-in-time. Revenue growth, FCF quality
+                and EPS revisions require the Phase-1 sourced dataset — em dash until then.
               </p>
             ) : (
               <p className="mt-3 border-t border-ink-700 pt-2 text-2xs leading-relaxed text-fg-mute">

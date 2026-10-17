@@ -57,6 +57,8 @@ const DECISIONS = [
   ['D0024', '2026-10-16', '3', 'First real acquisition executed (live mode): fixed normalise() tz-alignment frame loss + yfinance corporate-action capture; 23/23 series, 320 actions, 0 failures', 'validation PASS 26 checks; audit 103/103; bundle installed to dashboard (partial-real)', 'LOCKED'],
   ['D0025', '2026-10-16', '11', 'Acquisition bundle committed to the public repo — GitHub Pages renders real data; CI regenerates only fixture surfaces via the synthetic:false guard', 'dashboard/src/data no longer gitignored; owner-approved (public EOD prices)', 'LOCKED'],
   ['D0026', '2026-10-16', '3', 'End-to-end QA audit: six confirmed defects fixed (factor z-rank inversion, 12-1 momentum, Sharpe definition, worst_30d rolling-mean, truncated-name CAGR, chart copy); shipped via --from-parquet reprocess of the frozen acquisition; run_context recorded in manifests', 'docs/QA_REVIEW_2026-10-16.md; dry 123/123; reprocess 119/119', 'LOCKED'],
+  ['D0027', '2026-10-16', '3/11', 'Round-2 visual QA: 18 findings fixed. Strategy stats moved out-of-sample (ML CAGR 28.4% → 20.18%, Sharpe 0.645, maxDD −36.68%); fixture projection repaired (NVDA binds the 12% cap; 2 binding · 10 slack); caps unified 34/34/34; manifest flavour convergence; UI fixes across all pages; bundle reprocessed and fully re-shot', 'docs/QA_REVIEW_2026-10-16.md §6.1; dry 123/123; reprocess 119/119', 'LOCKED'],
+  ['D0028', '2026-10-17', '11', 'Owner QA round: brand renamed NASDAQ AI EQUITIES PORTFOLIO; audit-mode toggle removed (overlay mislabeled real panels as SIM); delta-chip arrow defect fixed (positive = ▲); Command-Center ranking dead space root-caused (fixed max-height cap in a stretched panel — now fills the body); AI-Universe header metrics + Stock-Intelligence snapshot panel filled from a current-state snapshot (Yahoo market cap + fwd P/E; manual exposure estimates; descriptive-only, never used in predictive computation)', 'docs/QA_REVIEW_2026-10-16.md §6.2; re-shoot verification; current_snapshot.json', 'LOCKED'],
 ] as const
 
 const OPEN_ISSUES = [
@@ -75,7 +77,7 @@ const OPEN_ISSUES = [
 const GATES_STATIC = [
   ['0A', 'Agent operating system', 'PASS', 'Context, compute boundary, source hierarchy and bias rules are explicit.'],
   ['0', 'Universe lock', 'PASS', '20 tickers, all exchange-verified, schema validation 131/131.'],
-  ['1', 'Fundamental dataset', 'NOT RUN', 'Phase 1 has not produced a sourced factor dataset.'],
+  ['1', 'Fundamental dataset', 'NOT RUN', 'Phase 1 has not produced a sourced point-in-time factor dataset; a descriptive current-state snapshot (market cap, fwd P/E, exposure estimates) now feeds the AI-Universe header cards and the Stock-Intelligence snapshot panel.'],
   ['4', 'Feature / target integrity', 'NOT RUN', 'Leakage test suite not yet executed.'],
   ['6', 'Signal validation', 'NOT RUN', 'Depends on Gates 4–5.'],
 ] as const
@@ -137,7 +139,7 @@ export function ResearchAudit() {
     [
       '9',
       'Dashboard',
-      dataMode.label === 'live data' ? 'PASS' : 'IN REVIEW',
+      dataMode.label === 'live data' ? 'PASS' : 'REVIEW',
       `Frontend renders versioned artifacts with artifact-level provenance — ${realCount} of ${manifest.real_vs_synthetic.length} surfaces real.`,
     ],
   ]
@@ -248,8 +250,10 @@ export function ResearchAudit() {
                         <td>
                           <Badge tone={st.tone}>{st.label}</Badge>
                         </td>
-                        <td className="whitespace-normal font-mono text-2xs text-fg-mute">
-                          {r.source}
+                        <td className="font-mono text-2xs text-fg-mute">
+                          <span className="block max-w-[320px] truncate" title={r.source}>
+                            {r.source}
+                          </span>
                         </td>
                       </tr>
                     )
@@ -281,7 +285,7 @@ export function ResearchAudit() {
                 </dl>
               </Panel>
 
-              <Panel title="Pending real artifacts" subtitle="To be produced on the Colab compute plane">
+              <Panel title="Real-artifact checklist" subtitle="Produced on the Colab compute plane — delivered items checked">
                 <ul className="space-y-1">
                   {manifest.pending_real_artifacts.map((a) => {
                     const done = a.includes('DELIVERED')
@@ -492,7 +496,7 @@ export function ResearchAudit() {
                         tone={
                           status === 'PASS'
                             ? 'pos'
-                            : status === 'IN REVIEW' || status === 'REVIEW'
+                            : status === 'REVIEW'
                               ? 'info'
                               : 'neutral'
                         }

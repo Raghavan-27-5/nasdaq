@@ -202,11 +202,23 @@ export function CommandCenter() {
         {/* ---------------- Equity curve + risk posture ---------------- */}
         <div className="grid gap-3 xl:grid-cols-[minmax(0,2.15fr)_minmax(0,1fr)]">
           <Panel
-            title="Out-of-sample equity"
+            title={
+              curveView === 'equity'
+                ? window_ === 'oos'
+                  ? 'Out-of-sample equity'
+                  : 'Full-window equity'
+                : window_ === 'oos'
+                  ? 'Out-of-sample drawdown'
+                  : 'Full-window drawdown'
+            }
             subtitle={
-              window_ === 'oos'
-                ? `Growth of 100 · ${backtest.oos_start} → ${backtest.oos_end} · ${backtest.rebalance}`
-                : `Growth of 100 · ${RESEARCH_START} → ${RESEARCH_END} (includes in-sample regime)`
+              curveView === 'equity'
+                ? window_ === 'oos'
+                  ? `Growth of 100 · ${backtest.oos_start} → ${backtest.oos_end} · ${backtest.rebalance}`
+                  : `Growth of 100 · ${RESEARCH_START} → ${RESEARCH_END} (includes in-sample regime)`
+                : window_ === 'oos'
+                  ? `Underwater curve · ML placeholder · ${backtest.oos_start} → ${backtest.oos_end}`
+                  : `Underwater curve · ML placeholder · ${RESEARCH_START} → ${RESEARCH_END}`
             }
             actions={
               mlSim ? (
@@ -222,32 +234,61 @@ export function CommandCenter() {
             }
           >
             {curveView === 'equity' ? (
-              <EChart option={curveOption} height={306} />
+              <EChart option={curveOption} height={420} />
             ) : (
-              <EChart option={ddOption} height={306} />
+              <EChart option={ddOption} height={420} />
             )}
-            <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-ink-700 pt-2.5">
-              {order.map((k) => {
-                const p = backtest.performance[k]
-                const isML = k === 'ML_PORTFOLIO'
-                return (
-                  <div key={k} className="flex items-center gap-2">
-                    <span
-                      className="h-[2px] w-4 shrink-0 rounded-full"
-                      style={{
-                        background: SERIES_COLOR[k],
-                        opacity: isML ? 1 : 0.6,
-                      }}
-                      aria-hidden
-                    />
-                    <span className="text-2xs text-fg-dim">{k.replace(/_/g, ' ')}</span>
-                    <span className="font-mono tnum text-2xs text-fg-base">
-                      {pctSigned(p.cagr * 100, 1)}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
+            {curveView === 'equity' ? (
+              <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-ink-700 pt-2.5">
+                {order.map((k) => {
+                  const p = backtest.performance[k]
+                  const isML = k === 'ML_PORTFOLIO'
+                  return (
+                    <div key={k} className="flex items-center gap-2">
+                      <span
+                        className="h-[2px] w-4 shrink-0 rounded-full"
+                        style={{
+                          background: SERIES_COLOR[k],
+                          opacity: isML ? 1 : 0.6,
+                        }}
+                        aria-hidden
+                      />
+                      <span className="text-2xs text-fg-dim">{k.replace(/_/g, ' ')}</span>
+                      <span className="font-mono tnum text-2xs text-fg-base">
+                        {pctSigned(p.cagr * 100, 1)}
+                      </span>
+                    </div>
+                  )
+                })}
+                {window_ === 'full' && (
+                  <span className="ml-auto font-mono text-3xs text-fg-mute">
+                    legend CAGRs: out-of-sample (2022 → 2026)
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-ink-700 pt-2.5">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="h-[2px] w-4 shrink-0 rounded-full"
+                    style={{ background: SERIES_COLOR.ML_PORTFOLIO }}
+                    aria-hidden
+                  />
+                  <span className="text-2xs text-fg-dim">ML portfolio · placeholder curve</span>
+                </div>
+                <span className="font-mono tnum text-2xs text-fg-base">
+                  max drawdown {pct(ml.max_dd, 1)}
+                </span>
+                <span className="font-mono tnum text-2xs text-fg-base">
+                  worst 30d {pct(ml.worst_30d, 1)}
+                </span>
+                {window_ === 'full' && (
+                  <span className="ml-auto font-mono text-3xs text-fg-mute">
+                    stats: out-of-sample (2022 → 2026)
+                  </span>
+                )}
+              </div>
+            )}
           </Panel>
 
           <div className="flex flex-col gap-3">
@@ -267,12 +308,15 @@ export function CommandCenter() {
               <div className="space-y-2.5">
                 {(
                   [
-                    ['Spearman IC', nf(m21.oos_ic_mean, 4), m21.oos_ic_mean],
-                    ['ICIR', nf(m21.icir, 3), m21.icir * 0.02],
-                    ['Hit rate', pct(m21.hit_rate, 1), m21.hit_rate - 0.5],
-                    ['OOS R²', nf(m21.r2, 4), m21.r2],
+                    // Bars scale against per-metric reference maxima; the
+                    // previous `max = |value|` made every bar 100% full and
+                    // conveyed nothing (visual QA finding, 2026-10-16).
+                    ['Spearman IC', nf(m21.oos_ic_mean, 4), m21.oos_ic_mean, 0.1],
+                    ['ICIR', nf(m21.icir, 3), m21.icir, 0.5],
+                    ['Hit rate', pct(m21.hit_rate, 1), m21.hit_rate - 0.5, 0.1],
+                    ['OOS R²', nf(m21.r2, 4), m21.r2, 0.05],
                   ] as const
-                ).map(([label, val, bar]) => (
+                ).map(([label, val, bar, scale]) => (
                   <div key={label}>
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="text-micro text-fg-dim">{label}</span>
@@ -280,7 +324,7 @@ export function CommandCenter() {
                     </div>
                     <MiniBar
                       value={bar}
-                      max={Math.max(Math.abs(bar), 0.0001)}
+                      max={scale}
                       tone={bar >= 0 ? 'pos' : 'neg'}
                       className="mt-1"
                     />
@@ -347,8 +391,12 @@ export function CommandCenter() {
               </button>
             }
             pad={false}
+            bodyClass="relative"
           >
-            <div className="max-h-[330px] overflow-y-auto">
+            {/* The table fills the panel body. The grid stretches this panel
+                to match the taller right-hand column, so a fixed max-height
+                cap left a dead band below the table (owner report, 2026-10-17). */}
+            <div className="absolute inset-0 overflow-auto">
               <table className="tbl">
                 <thead>
                   <tr>

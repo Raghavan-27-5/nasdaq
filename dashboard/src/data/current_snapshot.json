@@ -1,0 +1,196 @@
+{
+  "synthetic": false,
+  "status": "current_state_snapshot",
+  "descriptive_only": true,
+  "point_in_time": false,
+  "as_of": "2026-10-17",
+  "market_data_source": "Yahoo Finance via yfinance 1.7.0 (market cap, forward P/E); fetched 2026-10-17T04:03:05Z.",
+  "exposure_source": "Manual research pass v1 (2026-10-17) from public company disclosures and earnings commentary; per-name basis notes below. No vendor publishes these factors for the project's definitions.",
+  "rubric": {
+    "ai_revenue_exposure": "Estimated share of LTM revenue directly attributable to AI products/services (AI accelerators, AI cloud/compute, AI-enabled software), in [0,1].",
+    "aicapex_exposure": "Estimated sensitivity of revenue to the AI-datacentre capex cycle (share of revenue tied to AI infrastructure build-out), in [0,1]."
+  },
+  "note": "Current-state descriptive layer for the AI-Universe header metrics and the Stock-Intelligence fundamental-snapshot panel. Not point-in-time; must never be joined to historical observations or used in predictive/backtest computation (AGENTS.md s8). The Phase-1 sourced factor dataset supersedes this snapshot.",
+  "constituents": [
+    {
+      "ticker": "NVDA",
+      "company": "NVIDIA Corporation",
+      "market_cap_bn": 5170.6,
+      "fwd_pe": 13.45,
+      "ai_revenue_exposure": 0.9,
+      "aicapex_exposure": 0.95,
+      "basis": "Data Centre segment ~90% of revenue; essentially all AI/HPC compute."
+    },
+    {
+      "ticker": "AVGO",
+      "company": "Broadcom Inc.",
+      "market_cap_bn": 1569.3,
+      "fwd_pe": 16.95,
+      "ai_revenue_exposure": 0.35,
+      "aicapex_exposure": 0.7,
+      "basis": "AI semis (custom accelerators + networking) are the disclosed growth segment, roughly a third of revenue."
+    },
+    {
+      "ticker": "AMD",
+      "company": "Advanced Micro Devices, Inc.",
+      "market_cap_bn": 863.2,
+      "fwd_pe": 33.56,
+      "ai_revenue_exposure": 0.25,
+      "aicapex_exposure": 0.55,
+      "basis": "Instinct AI accelerators plus AI share of the Data Centre segment."
+    },
+    {
+      "ticker": "MU",
+      "company": "Micron Technology, Inc.",
+      "market_cap_bn": 994.3,
+      "fwd_pe": 4.25,
+      "ai_revenue_exposure": 0.35,
+      "aicapex_exposure": 0.6,
+      "basis": "HBM and data-centre DRAM roughly a third of revenue; AI-driven memory demand."
+    },
+    {
+      "ticker": "MSFT",
+      "company": "Microsoft Corporation",
+      "market_cap_bn": 3928.5,
+      "fwd_pe": 22.3,
+      "ai_revenue_exposure": 0.2,
+      "aicapex_exposure": 0.3,
+      "basis": "Azure AI services and Copilot products; AI revenue not separately disclosed."
+    },
+    {
+      "ticker": "GOOGL",
+      "company": "Alphabet Inc. Class A",
+      "market_cap_bn": 4165.4,
+      "fwd_pe": 22.28,
+      "ai_revenue_exposure": 0.18,
+      "aicapex_exposure": 0.28,
+      "basis": "Google Cloud AI and Gemini; AI revenue not separately disclosed."
+    },
+    {
+      "ticker": "AMZN",
+      "company": "Amazon.com, Inc.",
+      "market_cap_bn": 2696.6,
+      "fwd_pe": 23.94,
+      "ai_revenue_exposure": 0.18,
+      "aicapex_exposure": 0.3,
+      "basis": "AWS AI/accelerated compute and Bedrock services."
+    },
+    {
+      "ticker": "META",
+      "company": "Meta Platforms, Inc. Class A",
+      "market_cap_bn": 1807.0,
+      "fwd_pe": 20.48,
+      "ai_revenue_exposure": 0.15,
+      "aicapex_exposure": 0.35,
+      "basis": "AI-driven ranking/Advantage+ advertising; GenAI products not directly monetised."
+    },
+    {
+      "ticker": "PLTR",
+      "company": "Palantir Technologies Inc. Class A",
+      "market_cap_bn": 447.0,
+      "fwd_pe": 79.11,
+      "ai_revenue_exposure": 0.6,
+      "aicapex_exposure": 0.15,
+      "basis": "AIP-driven US commercial growth; government analytics estate is AI-heavy."
+    },
+    {
+      "ticker": "MRVL",
+      "company": "Marvell Technology, Inc.",
+      "market_cap_bn": 204.8,
+      "fwd_pe": 31.23,
+      "ai_revenue_exposure": 0.35,
+      "aicapex_exposure": 0.65,
+      "basis": "Custom AI silicon plus data-centre interconnect, roughly a third of revenue."
+    },
+    {
+      "ticker": "LRCX",
+      "company": "Lam Research Corporation",
+      "market_cap_bn": 330.3,
+      "fwd_pe": 22.43,
+      "ai_revenue_exposure": 0.15,
+      "aicapex_exposure": 0.65,
+      "basis": "WFE demand for AI memory/logic; no direct AI product revenue."
+    },
+    {
+      "ticker": "AMAT",
+      "company": "Applied Materials, Inc.",
+      "market_cap_bn": 324.8,
+      "fwd_pe": 22.18,
+      "ai_revenue_exposure": 0.15,
+      "aicapex_exposure": 0.65,
+      "basis": "WFE demand for AI memory/logic; no direct AI product revenue."
+    },
+    {
+      "ticker": "CDNS",
+      "company": "Cadence Design Systems, Inc.",
+      "market_cap_bn": 88.0,
+      "fwd_pe": 33.39,
+      "ai_revenue_exposure": 0.18,
+      "aicapex_exposure": 0.38,
+      "basis": "AI-enabled EDA flows (Verisium) drive premium; not separately disclosed."
+    },
+    {
+      "ticker": "SNPS",
+      "company": "Synopsys, Inc.",
+      "market_cap_bn": 87.1,
+      "fwd_pe": 24.35,
+      "ai_revenue_exposure": 0.2,
+      "aicapex_exposure": 0.4,
+      "basis": "AI-enabled EDA flows (Synopsys.ai) drive premium; not separately disclosed."
+    },
+    {
+      "ticker": "PANW",
+      "company": "Palo Alto Networks, Inc.",
+      "market_cap_bn": 279.8,
+      "fwd_pe": 70.1,
+      "ai_revenue_exposure": 0.08,
+      "aicapex_exposure": 0.1,
+      "basis": "AI security features (Cortex/XSIAM) attach; platform revenue is core."
+    },
+    {
+      "ticker": "CRWD",
+      "company": "CrowdStrike Holdings, Inc. Class A",
+      "market_cap_bn": 232.8,
+      "fwd_pe": 141.13,
+      "ai_revenue_exposure": 0.1,
+      "aicapex_exposure": 0.12,
+      "basis": "Falcon platform plus Charlotte AI; security revenue is core."
+    },
+    {
+      "ticker": "ADBE",
+      "company": "Adobe Inc.",
+      "market_cap_bn": 95.4,
+      "fwd_pe": 8.91,
+      "ai_revenue_exposure": 0.1,
+      "aicapex_exposure": 0.08,
+      "basis": "Firefly/AI features drive subscriptions; creative software is core."
+    },
+    {
+      "ticker": "DDOG",
+      "company": "Datadog, Inc. Class A",
+      "market_cap_bn": 88.7,
+      "fwd_pe": 83.08,
+      "ai_revenue_exposure": 0.11,
+      "aicapex_exposure": 0.15,
+      "basis": "AI-native customer cohort disclosed as a material ARR share, plus AI observability consumption."
+    },
+    {
+      "ticker": "CRWV",
+      "company": "CoreWeave, Inc. Class A",
+      "market_cap_bn": 33.9,
+      "fwd_pe": null,
+      "ai_revenue_exposure": 0.98,
+      "aicapex_exposure": 0.98,
+      "basis": "GPU cloud provider; revenue is ~entirely AI infrastructure. Forward P/E not meaningful (negative forward EPS)."
+    },
+    {
+      "ticker": "QCOM",
+      "company": "QUALCOMM Incorporated",
+      "market_cap_bn": 183.8,
+      "fwd_pe": 16.89,
+      "ai_revenue_exposure": 0.12,
+      "aicapex_exposure": 0.2,
+      "basis": "On-device AI in Snapdragon; handset/auto revenue still dominant."
+    }
+  ]
+}

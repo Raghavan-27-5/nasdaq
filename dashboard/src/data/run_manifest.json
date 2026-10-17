@@ -4,7 +4,7 @@
   "spec_version": "0.1.0",
   "universe_version": "0.1.0",
   "notebook": "nasdaq_ai_quant_acquire_v002.ipynb",
-  "executed_at": "2026-10-16T12:55:38.275420+00:00",
+  "executed_at": "2026-10-16T15:58:13.391351+00:00",
   "run_context": "local_reprocess (from saved prices_v001.parquet; frozen acquisition 2026-10-16)",
   "window": {
     "start": "2020-01-01",
@@ -517,8 +517,8 @@
   "files": {
     "market.json": "ec770b99d10996498d62e6d62ac9518f39c6d533ef8067e679edf4f2a4e44f03",
     "risk.json": "252f85b371619b89f0bae3089688439934ab778f7df8a712e89a7faeb97c02fe",
-    "backtest.json": "823abee4c805bc168bfdc3fc07649f0f907400ad3e85c93eab78333b5441f391",
+    "backtest.json": "24495bdd28e480d6fa2455d5cfed0c9285255542da0f1b1b1ff1608b4812b6f1",
     "fundamentals.json": "a4bfedb4589d318289c03762ded5815c9785120bfbeb67216fa0cab16678571f",
-    "manifest.json": "7ae85d38fbf1aa990f7a65c1c141ff082a854c7f406699c77d017d884c2111b1"
+    "manifest.json": "71e1d199c75391eca0f59858fd9232f2885e485f13244039cc48d5c1545b6c37"
   }
 }

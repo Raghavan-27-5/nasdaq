@@ -1101,6 +1101,7 @@ for yr in sorted({d[:4] for d in dates}):
     yearly.append(row)
 
 oos_start = next((d for d in dates if d >= "2022-01-03"), dates[0])
+oos_i = dates.index(oos_start)  # stats below are computed on the OOS slice only
 
 DIS_R = "REAL market data. Source: Yahoo Finance EOD chart API (yfinance/stooq fallbacks), adjusted close."
 DIS_S = "SYNTHETIC placeholder. Requires a trained model (Phase 6); not research output."
@@ -1198,7 +1199,14 @@ write("backtest.json", {
     "rebalance": "Buy and hold (equal-weight universe); ML placeholder not rebalanced",
     "cost_bps_round_trip": 10,
     "series": series, "series_provenance": PROV,
-    "performance": {k: perf(v) for k, v in series.items()},
+    # Strategy statistics are computed on the OUT-OF-SAMPLE slice only
+    # (oos_i ->). Every dashboard surface that consumes `performance`
+    # (Command-Center KPIs, legend CAGRs, Backtest headline/comparison, the
+    # yearly table's reference frame) labels these numbers "out-of-sample";
+    # computing them on the full window silently included the 2020-2021
+    # in-sample regime. Defect found by the 2026-10-16 visual QA review and
+    # verified by recomputation from the frozen Parquet.
+    "performance": {k: perf(v[oos_i:]) for k, v in series.items()},
     "yearly": yearly,
     "attribution": {
         "method": "OLS on daily log returns of the EQUAL-WEIGHT UNIVERSE vs QQQ and SOXX (real data, no model required)",

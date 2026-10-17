@@ -25,9 +25,6 @@ interface AppState {
   /** Cross-page selection. Selecting a name anywhere drills into it everywhere. */
   ticker: string
   selectTicker: (t: string) => void
-  /** Reveals inline SIMULATED markers on every panel (audit defence mode). */
-  auditMode: boolean
-  toggleAuditMode: () => void
   paletteOpen: boolean
   setPaletteOpen: (v: boolean) => void
 }
@@ -47,7 +44,6 @@ const parseHash = (): { route: RouteId; ticker?: string } => {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [{ route, ticker: hashTicker }, setLoc] = useState(parseHash)
   const [ticker, setTicker] = useState(hashTicker ?? TICKERS[0])
-  const [auditMode, setAuditMode] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
 
   // Keep the URL and the app in sync so a view is shareable/reloadable.
@@ -110,12 +106,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       navigate,
       ticker,
       selectTicker,
-      auditMode,
-      toggleAuditMode: () => setAuditMode((v) => !v),
       paletteOpen,
       setPaletteOpen,
     }),
-    [route, navigate, ticker, selectTicker, auditMode, paletteOpen],
+    [route, navigate, ticker, selectTicker, paletteOpen],
   )
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

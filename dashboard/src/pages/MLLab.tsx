@@ -109,7 +109,7 @@ export function MLLab() {
             width: 2,
           },
         ],
-        { yFormat: (v) => `${(v * 100).toFixed(2)}%`, legend: false },
+        { yFormat: (v) => `${(v * 100).toFixed(1)}%`, legend: false },
       ),
     [t],
   )
@@ -174,7 +174,7 @@ export function MLLab() {
                 >
                   {k.replace(/_/g, ' ')}
                 </div>
-                <div className="mt-1 flex items-baseline justify-between gap-1">
+                <div className="mt-1 flex items-baseline gap-1.5">
                   <span className="font-mono tnum text-[15px] text-fg-hi">
                     {nf(m.icir, 2)}
                   </span>

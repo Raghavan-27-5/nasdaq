@@ -7,8 +7,7 @@ import { humanise, fmtDate } from '@/lib/format'
 import { Badge } from '@/components/ui/Value'
 
 export function Topbar() {
-  const { route, navigate, ticker, selectTicker, auditMode, toggleAuditMode, setPaletteOpen } =
-    useApp()
+  const { route, navigate, ticker, selectTicker, setPaletteOpen } = useApp()
   const [pickerOpen, setPickerOpen] = useState(false)
 
   const current = ROUTES.find((r) => r.id === route)!
@@ -98,29 +97,6 @@ export function Topbar() {
         <span className="text-3xs uppercase tracking-[0.12em] text-fg-mute">Cutoff</span>
         <span className="font-mono text-[11.5px] text-fg-dim">{universe.research_window.end_inclusive}</span>
       </div>
-
-      {/* Audit mode: reveals inline provenance markers across every panel. */}
-      <button
-        type="button"
-        onClick={toggleAuditMode}
-        aria-pressed={auditMode}
-        title="Toggle inline provenance markers on every panel"
-        className={clsx(
-          'flex items-center gap-1.5 rounded-sm border px-2 py-[3px] font-mono text-3xs font-semibold uppercase tracking-wider transition-colors',
-          auditMode
-            ? 'border-sig-warn/40 bg-sig-warn/15 text-sig-warn'
-            : 'border-ink-700 bg-ink-850 text-fg-dim hover:border-ink-650 hover:text-fg-base',
-        )}
-      >
-        <span
-          className={clsx(
-            'h-1.5 w-1.5 rounded-full',
-            auditMode ? 'bg-sig-warn' : 'bg-fg-mute',
-          )}
-          aria-hidden
-        />
-        Audit mode
-      </button>
 
       <Badge tone={dataMode.tone} title={dataMode.title}>
         {dataMode.label}

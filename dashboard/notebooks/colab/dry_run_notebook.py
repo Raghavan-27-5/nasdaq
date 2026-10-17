@@ -600,8 +600,12 @@ def audit(ns: dict) -> None:
     # Formula regressions (fixed 2026-10-16): Sharpe is annualised mean / vol
     # (rf 0), and worst_30d is a 30-trading-day cumulative return - not a
     # rolling mean of daily returns, which understated the worst month ~15x.
+    # Second fix (2026-10-16 QA pass 2): the performance block must be
+    # computed on the OUT-OF-SAMPLE slice only, matching every dashboard
+    # label that consumes it. Recompute from the same slice here.
+    oos_i = market["dates"].index(back["oos_start"])
     for k, arr in series.items():
-        r = np.diff(np.log(np.asarray(arr, float)))
+        r = np.diff(np.log(np.asarray(arr, float)[oos_i:]))
         mu = float(np.mean(r) * 252)
         vol = float(np.std(r, ddof=1) * math.sqrt(252))
         exp_sh = round(mu / vol, 3) if vol > 0 else 0.0

@@ -182,7 +182,10 @@ export function drawdownOption(dates: string[], values: NullNum[]): EChartsOptio
                 <span style="color:${C.neg};font-weight:500">${(v * 100).toFixed(2)}%</span>`
       },
     },
-    xAxis: { type: 'category', boundaryGap: false, data: dates, ...axisCommon, splitLine: { show: false }, axisLabel: { show: false } },
+    // Date labels shown: all drawdown views previously hid the x-axis,
+    // making the window unreadable next to the equity views (visual QA,
+    // 2026-10-16).
+    xAxis: { type: 'category', boundaryGap: false, data: dates, ...axisCommon, splitLine: { show: false } },
     yAxis: {
       type: 'value',
       max: 0,

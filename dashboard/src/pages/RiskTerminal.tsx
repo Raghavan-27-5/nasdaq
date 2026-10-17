@@ -151,7 +151,10 @@ export function RiskTerminal() {
         textStyle: { color: C.hi, fontFamily: '"JetBrains Mono Variable", monospace', fontSize: 11 },
         extraCssText: 'box-shadow:0 12px 32px -8px rgba(0,0,0,.8);border-radius:3px;',
         formatter: (p: unknown) => {
-          const d = (p as { data: { name: string; w: number }[] }).data[0]
+          // params.data is the raw data item ({name, value, w}), not an
+          // array of items - indexing [0] yielded undefined and broke the
+          // tooltip (fixed with the bubble-size defect, 2026-10-16).
+          const d = (p as { data: { name: string; w: number } }).data
           return `<div style="color:${C.hi};font-weight:600">${d.name}</div>
             <div style="color:${C.dim};margin-top:3px">weight ${pct(d.w, 1)}</div>`
         },
@@ -167,7 +170,14 @@ export function RiskTerminal() {
             ],
             w: wOf(t),
           })),
-          symbolSize: (d: unknown) => 7 + Math.sqrt((d as { w: number }).w) * 30,
+          // ECharts invokes this as (value, params); the raw data item with
+          // the custom `w` field lives on params.data. Reading `d.w` off the
+          // value array returned undefined -> NaN symbol size -> zero
+          // bubbles rendered (visual-QA blocker, 2026-10-16).
+          symbolSize: (_v: unknown, p: unknown) => {
+            const item = (p as { data?: { w?: number } } | undefined)?.data
+            return 7 + Math.sqrt(Math.max(item?.w ?? 0, 0)) * 30
+          },
           itemStyle: {
             color: C.pos,
             opacity: 0.72,

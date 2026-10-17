@@ -6,6 +6,7 @@ import portfolioRaw from '@/data/portfolio.json'
 import riskRaw from '@/data/risk.json'
 import backtestRaw from '@/data/backtest.json'
 import manifestRaw from '@/data/manifest.json'
+import currentSnapshotRaw from '@/data/current_snapshot.json'
 
 // ---------------------------------------------------------------------------
 // Types. These mirror the generator's output contract; the artifacts are
@@ -94,6 +95,35 @@ export interface FundamentalsArtifact {
    * sourced dataset. Set by the Colab acquisition notebook.
    */
   fundamental_factors_pending?: boolean
+}
+
+/** One name in the current-state snapshot used by the AI-Universe header metrics. */
+export interface SnapshotRow {
+  ticker: string
+  company: string
+  market_cap_bn: number | null
+  fwd_pe: number | null
+  ai_revenue_exposure: number | null
+  aicapex_exposure: number | null
+  basis: string
+}
+
+/**
+ * Current-state descriptive snapshot (market cap, forward P/E, AI/capex
+ * exposure). Sourced 2026-10-17; NOT point-in-time and never joined to
+ * historical/predictive computation (AGENTS.md s8).
+ */
+export interface CurrentSnapshot {
+  synthetic: boolean
+  status: string
+  descriptive_only: boolean
+  point_in_time: boolean
+  as_of: string
+  market_data_source: string
+  exposure_source: string
+  rubric: Record<string, string>
+  note: string
+  constituents: SnapshotRow[]
 }
 
 export interface Fold {
@@ -282,6 +312,7 @@ export interface ManifestArtifact {
 export const universe = universeRaw as unknown as UniverseArtifact
 export const market = marketRaw as unknown as MarketArtifact
 export const fundamentals = fundamentalsRaw as unknown as FundamentalsArtifact
+export const currentSnapshot = currentSnapshotRaw as unknown as CurrentSnapshot
 export const models = modelsRaw as unknown as ModelsArtifact
 export const portfolio = portfolioRaw as unknown as PortfolioArtifact
 export const risk = riskRaw as unknown as RiskArtifact

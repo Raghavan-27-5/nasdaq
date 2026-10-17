@@ -1,7 +1,5 @@
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
-import { useApp } from '@/lib/store'
-import { provLabel, provTone } from '@/lib/provenance'
 import type { ProvStatus } from '@/lib/provenance'
 
 // ---------------------------------------------------------------------------
@@ -17,7 +15,6 @@ export function Panel({
   className,
   bodyClass,
   pad = true,
-  provenance,
 }: {
   title?: ReactNode
   subtitle?: ReactNode
@@ -26,10 +23,13 @@ export function Panel({
   className?: string
   bodyClass?: string
   pad?: boolean
-  /** What this panel's figures are made of. Shown inline in audit mode. */
+  /**
+   * What this panel's figures are made of. Retained for call-site
+   * documentation; the inline marker toggle was removed 2026-10-17
+   * (owner request - it flagged real panels as SIM).
+   */
   provenance?: ProvStatus
 }) {
-  const { auditMode } = useApp()
   return (
     <section className={clsx('panel edge-lit flex flex-col', className)}>
       {(title || actions) && (
@@ -39,7 +39,6 @@ export function Panel({
               <h2 className="truncate text-[13px] font-semibold tracking-tight text-fg-hi">
                 {title}
               </h2>
-              {auditMode && (provenance ? <ProvChip status={provenance} /> : <Sim />)}
             </div>
             {subtitle && (
               <p className="mt-0.5 truncate text-2xs text-fg-dim">{subtitle}</p>
@@ -64,7 +63,7 @@ export function Panel({
   )
 }
 
-/** Inline provenance marker, visible always in audit mode. */
+/** Inline synthetic-data marker (fixture rows in tables, etc.). */
 export function Sim({ className }: { className?: string }) {
   return (
     <span
@@ -75,32 +74,6 @@ export function Sim({ className }: { className?: string }) {
       )}
     >
       sim
-    </span>
-  )
-}
-
-/** Typed variant of the audit-mode marker, used when a panel's provenance is known. */
-export function ProvChip({ status }: { status: ProvStatus }) {
-  const tone = provTone(status)
-  return (
-    <span
-      title={
-        status === 'real'
-          ? 'Real artifact - traceable to a versioned Colab run'
-          : status === 'synthetic'
-            ? 'Synthetic fixture - not research output'
-            : status === 'pending'
-              ? 'Not yet produced - awaiting a later phase'
-              : 'Mixed provenance - see Research Audit ledger'
-      }
-      className={clsx(
-        'shrink-0 rounded-xs border px-1 py-px font-mono text-3xs font-semibold uppercase tracking-wider',
-        tone === 'pos' && 'border-sig-pos/30 bg-sig-pos/10 text-sig-pos',
-        tone === 'warn' && 'border-sig-warn/30 bg-sig-warn/10 text-sig-warn',
-        tone === 'info' && 'border-sig-info/30 bg-sig-info/10 text-sig-info',
-      )}
-    >
-      {provLabel(status)}
     </span>
   )
 }

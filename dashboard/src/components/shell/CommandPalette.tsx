@@ -13,8 +13,7 @@ interface Item {
 }
 
 export function CommandPalette() {
-  const { paletteOpen, setPaletteOpen, navigate, selectTicker, auditMode, toggleAuditMode } =
-    useApp()
+  const { paletteOpen, setPaletteOpen, navigate, selectTicker } = useApp()
   const [q, setQ] = useState('')
   const [active, setActive] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -35,17 +34,8 @@ export function CommandPalette() {
       hint: `${humanise(TICKER_META[t].ai_category)} · rank #${FUND[t].rank}`,
       run: () => selectTicker(t),
     }))
-    const actions: Item[] = [
-      {
-        id: 'a-audit',
-        label: auditMode ? 'Hide inline provenance markers' : 'Show inline provenance markers',
-        group: 'Action',
-        hint: 'Audit mode: reveal what every panel is made of',
-        run: () => toggleAuditMode(),
-      },
-    ]
-    return [...routes, ...stocks, ...actions]
-  }, [navigate, selectTicker, auditMode, toggleAuditMode])
+    return [...routes, ...stocks]
+  }, [navigate, selectTicker])
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
