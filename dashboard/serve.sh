@@ -16,7 +16,8 @@ echo "  Nasdaq AI Quant Research Terminal"
 echo "  ------------------------------------------------"
 echo "  http://localhost:${PORT}/"
 echo
-echo "  NOTE: this build renders SYNTHETIC demo data, not research output."
+echo "  NOTE: this build mixes real versioned artifacts with labelled placeholders."
+echo "  Full per-surface status is on the in-app Research Audit page."
 echo "  Press Ctrl+C to stop."
 echo
 exec python3 -m http.server "$PORT" --directory dist --bind 127.0.0.1

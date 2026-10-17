@@ -174,7 +174,9 @@ export function CommandCenter() {
             value={nf(m21.oos_ic_mean, 3)}
             tone={m21.oos_ic_mean > 0 ? 'pos' : 'neg'}
             sub={`ICIR ${nf(m21.icir, 2)}`}
-            footnote={`Hit rate ${pct(m21.hit_rate, 1)}${modelsAreSynthetic ? ' · fixture' : ''}`}
+            footnote={`Hit rate ${pct(m21.hit_rate, 1)}${
+              m21.hit_rate_base != null ? ` · base ${pct(m21.hit_rate_base, 1)}` : ''
+            }${modelsAreSynthetic ? ' · fixture' : ''}`}
           />
           <StatTile
             label="Factor Alpha"
@@ -313,7 +315,7 @@ export function CommandCenter() {
                     // conveyed nothing (visual QA finding, 2026-10-16).
                     ['Spearman IC', nf(m21.oos_ic_mean, 4), m21.oos_ic_mean, 0.1],
                     ['ICIR', nf(m21.icir, 3), m21.icir, 0.5],
-                    ['Hit rate', pct(m21.hit_rate, 1), m21.hit_rate - 0.5, 0.1],
+                    ['Hit rate', pct(m21.hit_rate, 1), m21.hit_rate - (m21.hit_rate_base ?? 0.5), 0.1],
                     ['OOS R²', nf(m21.r2, 4), m21.r2, 0.05],
                   ] as const
                 ).map(([label, val, bar, scale]) => (
@@ -332,8 +334,9 @@ export function CommandCenter() {
                 ))}
               </div>
               <p className="mt-3 border-t border-ink-700 pt-2.5 text-2xs leading-relaxed text-fg-mute">
-                Modest by design. A cross-sectional daily signal on 20 correlated names rarely
-                produces a large IC; the tests that matter are cost-adjusted and factor-controlled.
+                In this run the return targets show no out-of-sample edge (IC at or below zero);
+                hit rate is at/below the always-up base rate. ICIR is unannualised. Cost-adjusted
+                and factor-controlled tests arrive with the Phase 10 backtest.
               </p>
             </Panel>
 

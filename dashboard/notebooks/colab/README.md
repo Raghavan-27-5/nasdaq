@@ -279,8 +279,9 @@ green** on the frozen acquisition. The canonical Colab run executed **2026-10-17
 `artifacts/training_v001/` (local, git-ignored — the Drive copies are canonical). Result
 summary: vol targets strongly predictable (vol_21d IC +0.52); return/direction targets show
 no out-of-sample edge with price-only v1 features — the honest null is recorded in
-`PHASE_LOG.md` D0030. Wiring `predictions_v007` / `training_report_v001` into the dashboard
-is a separate reviewed change.
+`PHASE_LOG.md` D0030. The dashboard wiring landed 2026-10-17: `dashboard/scripts/
+wire_training_results.py` re-verifies this bundle (SHA-256 + metric recomputation) and
+writes `models.json` plus the manifest ML row — see `PHASE_LOG.md` D0031.
 
 ## Regenerating
 

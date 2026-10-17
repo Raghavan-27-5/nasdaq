@@ -432,11 +432,15 @@ def audit(ns: dict) -> None:
         str(sorted({s.split(" ")[0] for s in statuses})),
     )
     check(
-        "running with fixtures keeps ML/portfolio rows synthetic",
+        "running with fixtures keeps portfolio/ML-curve rows synthetic",
         all(
             man["real_vs_synthetic"][i]["status"].startswith("SYNTHETIC")
-            for i in (5, 6, 10)
+            for i in (6, 10)
         ),
+    )
+    check(
+        "ML Lab row is REAL (wired from the Phase 5/6 training run)",
+        man["real_vs_synthetic"][5]["status"].startswith("REAL"),
     )
 
     print("\n--- risk numerics ------------------------------------------------")

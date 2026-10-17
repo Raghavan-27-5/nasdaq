@@ -59,6 +59,8 @@ const DECISIONS = [
   ['D0026', '2026-10-16', '3', 'End-to-end QA audit: six confirmed defects fixed (factor z-rank inversion, 12-1 momentum, Sharpe definition, worst_30d rolling-mean, truncated-name CAGR, chart copy); shipped via --from-parquet reprocess of the frozen acquisition; run_context recorded in manifests', 'docs/QA_REVIEW_2026-10-16.md; dry 123/123; reprocess 119/119', 'LOCKED'],
   ['D0027', '2026-10-16', '3/11', 'Round-2 visual QA: 18 findings fixed. Strategy stats moved out-of-sample (ML CAGR 28.4% → 20.18%, Sharpe 0.645, maxDD −36.68%); fixture projection repaired (NVDA binds the 12% cap; 2 binding · 10 slack); caps unified 34/34/34; manifest flavour convergence; UI fixes across all pages; bundle reprocessed and fully re-shot', 'docs/QA_REVIEW_2026-10-16.md §6.1; dry 123/123; reprocess 119/119', 'LOCKED'],
   ['D0028', '2026-10-17', '11', 'Owner QA round: brand renamed NASDAQ AI EQUITIES PORTFOLIO; audit-mode toggle removed (overlay mislabeled real panels as SIM); delta-chip arrow defect fixed (positive = ▲); Command-Center ranking dead space root-caused (fixed max-height cap in a stretched panel — now fills the body); AI-Universe header metrics + Stock-Intelligence snapshot panel filled from a current-state snapshot (Yahoo market cap + fwd P/E; manual exposure estimates; descriptive-only, never used in predictive computation)', 'docs/QA_REVIEW_2026-10-16.md §6.2; re-shoot verification; current_snapshot.json', 'LOCKED'],
+  ['D0029', '2026-10-17', '5/6', 'Phase 5/6 training pipeline built and rehearsed offline (24/24 checks): feature/target factories, purged walk-forward, pre-registered artifact names', 'build_train_notebook.py · dry_run_train.py · D0029', 'LOCKED'],
+  ['D0030', '2026-10-17', '5/6', 'First real walk-forward ML run executed in Colab — 24/24 checks, SHA-256 verified: volatility targets strongly predictable (vol_21d IC +0.52 / ICIR 1.94); return and direction targets show no OOS edge (IC ≈ 0, mildly negative R²) — honest null recorded', 'training_report_v001.json · PHASE_LOG D0030', 'LOCKED'],
 ] as const
 
 const OPEN_ISSUES = [
@@ -78,8 +80,8 @@ const GATES_STATIC = [
   ['0A', 'Agent operating system', 'PASS', 'Context, compute boundary, source hierarchy and bias rules are explicit.'],
   ['0', 'Universe lock', 'PASS', '20 tickers, all exchange-verified, schema validation 131/131.'],
   ['1', 'Fundamental dataset', 'NOT RUN', 'Phase 1 has not produced a sourced point-in-time factor dataset; a descriptive current-state snapshot (market cap, fwd P/E, exposure estimates) now feeds the AI-Universe header cards and the Stock-Intelligence snapshot panel.'],
-  ['4', 'Feature / target integrity', 'NOT RUN', 'Leakage test suite not yet executed.'],
-  ['6', 'Signal validation', 'NOT RUN', 'Depends on Gates 4–5.'],
+  ['4', 'Feature / target integrity', 'REVIEW', 'Walk-forward integrity checks executed in the Phase 5/6 run (24/24: truncated-history recompute, label alignment, purge/embargo geometry, date-local cross-sections). Formal gate review pending.'],
+  ['6', 'Signal validation', 'REVIEW', 'IC, ICIR, decay, annual breakdown and quantile profiles computed out-of-sample (PHASE_LOG D0030). Transaction-cost, concentration and regime tests pending (OI-0003 / OI-0005).'],
 ] as const
 
 export function ResearchAudit() {
@@ -90,6 +92,7 @@ export function ResearchAudit() {
   const syntheticCount = syntheticSurfaces.length
   const pendingCount = pendingSurfaces.length
   const acq = manifest.acquisition
+  const train = manifest.training
   const backtestReal = backtest.series_provenance !== undefined
 
   const gates: readonly (readonly [string, string, string, string])[] = [
@@ -117,7 +120,11 @@ export function ResearchAudit() {
       '5',
       'Walk-forward ML',
       modelsAreSynthetic ? 'NOT RUN' : 'REVIEW',
-      modelsAreSynthetic ? 'Models not trained in Colab.' : 'Model artifact present — awaiting protocol review.',
+      modelsAreSynthetic
+        ? 'Models not trained in Colab.'
+        : train
+          ? `Trained in Colab (${fmtDate(train.executed_at.slice(0, 10))}, ${train.checks} checks). Return/direction targets show no OOS edge; volatility targets are strongly predictable — PHASE_LOG D0030. Protocol review pending.`
+          : 'Model artifact present — awaiting protocol review.',
     ],
     GATES_STATIC[4],
     [
@@ -201,9 +208,10 @@ export function ResearchAudit() {
               </div>
               {realCount > 2 ? (
                 <p className="mt-1 max-w-[140ch] text-micro leading-relaxed text-fg-base">
-                  Market prices, market-derived risk statistics and the equal-weight / benchmark
-                  backtest curves come from a real acquisition run
-                  {acq ? ` (${acq.notebook}, ${fmtDate(acq.executed_at.slice(0, 10))})` : ''}.
+                  Market prices and risk statistics, the equal-weight / benchmark backtest curves
+                  and the walk-forward model metrics come from real versioned runs
+                  {acq ? ` (acquisition: ${acq.notebook}, ${fmtDate(acq.executed_at.slice(0, 10))})` : ''}
+                  {train ? ` (training: ${train.notebook}, ${fmtDate(train.executed_at.slice(0, 10))}, ${train.checks} checks)` : ''}.
                   Surfaces flagged <code className="font-mono text-fg-hi">SYNTHETIC</code> are
                   fixtures generated by{' '}
                   <code className="font-mono text-fg-hi">dashboard/scripts/gen_demo_data.py</code>
@@ -271,6 +279,8 @@ export function ResearchAudit() {
                       ['Universe', `v${manifest.universe_version}`],
                       ['Features', models.feature_version],
                       ['Targets', models.target_version],
+                      ['Model', models.model_version ?? '—'],
+                      ['Trained', train ? fmtDate(train.executed_at.slice(0, 10)) : '—'],
                       ['Portfolio', portfolio.portfolio_version],
                       ['Optimizer', portfolio.optimizer_version],
                       ['Objective', portfolio.objective_version],
@@ -558,10 +568,10 @@ export function ResearchAudit() {
                         ['Statistically significant but economically trivial', 'PENDING', 'Requires trained-model OOS statistics and factor-controlled alpha.'],
                       ] as const)
                     : ([
-                        ['Predictive but not profitable', 'NOT ESTABLISHED', 'ICIR is positive but small; no net-of-cost edge survives.'],
-                        ['Profitable but factor-driven', 'LIKELY', 'R² 0.70 against QQQ + SOXX; residual alpha is not significant.'],
+                        ['Predictive but not profitable', 'NOT ESTABLISHED', 'Return and direction targets show no out-of-sample edge (IC ≈ 0; |t| < 1.7; hit rates at or below the always-up base rate). There is no signal to monetise.'],
+                        ['Profitable but factor-driven', 'PENDING', 'Requires the Phase 10 ML-strategy backtest — the ML portfolio curve is still a labelled placeholder.'],
                         ['Profitable but capacity-limited', 'NOT TESTED', 'Capacity analysis not run.'],
-                        ['Statistically significant but economically trivial', 'APPLIES', 'Alpha t-stat 0.57 — indistinguishable from zero.'],
+                        ['Statistically significant but economically trivial', 'N/A', 'No return/direction statistic is significant. Volatility predictability is strong but is a risk model, not alpha.'],
                       ] as const)
                   ).map(([k, verdict, note]) => (
                     <div key={k} className="flex items-start justify-between gap-3 border-b border-ink-700/50 pb-2 last:border-0">
@@ -570,9 +580,7 @@ export function ResearchAudit() {
                         <div className="mt-0.5 text-2xs leading-relaxed text-fg-mute">{note}</div>
                       </div>
                       <Badge
-                        tone={
-                          verdict === 'APPLIES' || verdict === 'LIKELY' ? 'warn' : 'neutral'
-                        }
+                        tone={verdict === 'PENDING' ? 'info' : 'neutral'}
                         className="mt-0.5 shrink-0"
                       >
                         {verdict}
@@ -590,12 +598,12 @@ export function ResearchAudit() {
                 <ol className="space-y-1.5">
                   {(
                     [
-                      'Could the model be learning momentum only? — Likely; momentum features dominate importance.',
-                      'Could it be learning semiconductor beta only? — Partly; RS vs SOXX and SOXX beta rank highly.',
-                      'Could it be learning volatility/crowding only? — Not excluded.',
-                      'Does the signal disappear after costs? — Degrades at 10 bps, does not invert.',
-                      'Does the signal survive 2022? — Fold-level results shown; regime table available.',
-                      'Does the signal survive 2025/2026? — Yes, weakly.',
+                      'Could the model be learning momentum only? — Partly; short-horizon returns and realised volatility dominate importance; no ablation run yet.',
+                      'Could it be learning semiconductor beta only? — No; features_v003 contains no SOXX inputs (QQQ beta only).',
+                      'Could it be learning volatility/crowding only? — Cannot be excluded; volatility features rank highest on the vol targets.',
+                      'Does the signal disappear after costs? — NOT TESTED; the net-of-cost test arrives with the Phase 10 backtest (OI-0003).',
+                      'Does the signal survive 2022? — Return/direction IC ≈ 0 in every year including 2022; volatility IC positive across years.',
+                      'Does the signal survive 2025/2026? — No return edge in any year; volatility predictability persists.',
                       'Does it survive removing the largest-cap names? — OPEN, not yet run.',
                       'Does it survive feature ablation? — OPEN, not yet run.',
                       'Does it survive a stricter universe screen? — OPEN, not yet run.',
@@ -625,6 +633,12 @@ export function ResearchAudit() {
                         acq
                           ? `Yahoo Finance EOD · ${acq.notebook} · ${fmtDate(acq.executed_at.slice(0, 10))}`
                           : 'Not yet acquired',
+                      ],
+                      [
+                        'Model metrics',
+                        train
+                          ? `training_report_v001.json · ${train.notebook} · ${fmtDate(train.executed_at.slice(0, 10))}`
+                          : 'Not yet trained',
                       ],
                       [
                         'Synthetic surfaces',

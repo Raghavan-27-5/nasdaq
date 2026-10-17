@@ -139,6 +139,8 @@ export interface Fold {
   n_test: number
   purge_days: number
   embargo_days: number
+  /** Days between validation end and test start (present in real bundles). */
+  val_test_gap_days?: number
   best_iter: number
   oos_ic: number
   oos_r2: number
@@ -159,9 +161,20 @@ export interface ModelTarget {
   n_oos_rows: number
   oos_start: string
   oos_end: string
+  /** Exact per-date IC dates (real bundles); fixtures omit and the UI falls back. */
+  ic_dates?: string[]
+  /** Trivial-model base rate for this hit-rate convention (vol: 0.50 by construction). */
+  hit_rate_base?: number
+  hit_rate_convention?: string
+  annual_ic?: Record<string, number>
+  model_version?: string
   folds: Fold[]
   ic_series: number[]
   decay: { horizon: number; ic: number }[]
+  /**
+   * Per-prediction-decile mean of the target's own quantity: forward return
+   * (return targets), realised vol (vol targets) or P(up) (direction targets).
+   */
   quantiles: { labels: string[]; mean_forward_return: number[] }
   /** JSON object of feature name -> gain importance (NOT a tuple array). */
   feature_importance: Record<string, number>
@@ -176,6 +189,21 @@ export interface ModelsArtifact {
   universe_version: string
   validation: string
   targets: Record<string, ModelTarget>
+  /** Provenance, present once a real training bundle is wired (PHASE_LOG D0031). */
+  model_version?: string
+  engine?: string
+  run_context?: string
+  executed_at?: string
+  checks?: { passed: number; total: number }
+  sources?: Record<string, string>
+  protocol?: {
+    oos_start: string
+    folds: number
+    test_window_days: number
+    validation_window_days: number
+    purge: string
+    embargo_days: number
+  }
 }
 
 export interface PortfolioArtifact {
@@ -302,6 +330,15 @@ export interface ManifestArtifact {
     sources: string
     validation: string
     trading_days: number
+  }
+  /** Summary of the Colab walk-forward training run (Phase 5/6). */
+  training?: {
+    notebook: string
+    executed_at: string
+    run_context?: string
+    engine: string
+    checks: string
+    artifacts: string[]
   }
 }
 

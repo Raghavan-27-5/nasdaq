@@ -23,23 +23,24 @@ const TARGET_ORDER = [
 ] as const
 
 const FEATURE_LABEL: Record<string, string> = {
-  mom_252_21: '252d → 21d momentum',
-  mom_63_21: '63d → 21d momentum',
-  mom_21_5: '21d → 5d momentum',
+  ret_1d: '1d return',
+  ret_5d: '5d return',
+  ret_21d: '21d return',
+  ret_63d: '63d return',
+  ret_126d: '126d return',
+  momentum_12_1: '12-1 momentum (252d → 21d)',
   vol_21d: '21d realised volatility',
-  vol_of_vol_63: 'Volatility of volatility (63d)',
-  vol_ratio_21_63: 'Vol ratio 21d / 63d',
-  atr_14_pct: 'ATR(14) as % of price',
-  range_parkinson_21: 'Parkinson range (21d)',
-  downside_dev_21: 'Downside deviation (21d)',
-  rs_vs_soxx_63: 'Relative strength vs SOXX (63d)',
-  beta_soxx_126: 'Beta vs SOXX (126d)',
-  corr_soxx_63: 'Correlation vs SOXX (63d)',
-  dollar_vol_rank: 'Dollar volume rank',
-  dist_sma_63: 'Distance from SMA(63)',
-  skew_63: 'Skew (63d)',
-  gap_freq_21: 'Gap frequency (21d)',
-  rev_z_5: '5d return z-score',
+  vol_63d: '63d realised volatility',
+  dist_52w_high: 'Distance from 52w high',
+  sma_20_50: 'SMA20 / SMA50 − 1',
+  sma_50_200: 'SMA50 / SMA200 − 1',
+  rsi_14: 'RSI(14), centred on 50',
+  macd_hist: 'MACD histogram / price',
+  vol_ratio_21: 'Volume / SMA21(volume) − 1',
+  ret_21d_rel: '21d return − QQQ 21d',
+  beta_63d: 'Beta vs QQQ (63d)',
+  cs_rank_mom: 'Cross-sectional rank · 12-1 momentum',
+  cs_rank_vol21: 'Cross-sectional rank · 21d vol',
 }
 
 export function MLLab() {
@@ -49,11 +50,14 @@ export function MLLab() {
 
   const t = models.targets[target]
 
-  // Weekly IC series is indexed forward from the OOS start date.
+  // Real bundles carry exact per-date IC dates; fixture bundles fall back to
+  // the old weekly-indexed approximation from the OOS start.
+  const dailyIc = Array.isArray(t.ic_dates) && t.ic_dates.length === t.ic_series.length
   const icDates = useMemo(() => {
+    if (dailyIc) return t.ic_dates as string[]
     const start = market.dates.findIndex((d) => d >= t.oos_start)
     return t.ic_series.map((_, i) => market.dates[Math.min(start + i * 5, market.dates.length - 1)])
-  }, [t])
+  }, [t, dailyIc])
 
   const icOption = useMemo(
     () =>
@@ -62,7 +66,7 @@ export function MLLab() {
         [
           {
             key: 'IC',
-            label: 'Spearman IC (weekly)',
+            label: `Spearman IC (${dailyIc ? 'daily' : 'weekly'})`,
             values: t.ic_series,
             color: C.pos,
             width: 1.2,
@@ -96,6 +100,18 @@ export function MLLab() {
     [t],
   )
 
+  const qMetric = t.target.startsWith('vol')
+    ? 'Mean forward realised vol'
+    : t.target.startsWith('direction')
+      ? 'Mean forward P(up)'
+      : 'Mean forward return'
+  const qv = t.quantiles.mean_forward_return
+  const qSpread = qv.length > 1 ? qv[qv.length - 1] - qv[0] : 0
+  const qSteps = Math.max(qv.length - 1, 0)
+  const qStepsUp = qv.reduce((n, v, i) => (i > 0 && v >= qv[i - 1] - 1e-9 ? n + 1 : n), 0)
+  const qLast = t.quantiles.labels[t.quantiles.labels.length - 1] ?? 'top'
+  const qFirst = t.quantiles.labels[0] ?? 'bottom'
+
   const quantileOption = useMemo(
     () =>
       timeSeriesOption(
@@ -103,7 +119,7 @@ export function MLLab() {
         [
           {
             key: 'Q',
-            label: 'Mean forward return',
+            label: qMetric,
             values: t.quantiles.mean_forward_return,
             color: C.pos,
             width: 2,
@@ -184,7 +200,7 @@ export function MLLab() {
                   values={m.ic_series.length > 1 ? downsample(m.ic_series, 40) : [0, 0]}
                   width={70}
                   height={14}
-                  tone={active ? 'pos' : 'auto'}
+                  tone={m.oos_ic_mean >= 0 ? 'pos' : 'neg'}
                 />
               </button>
             )
@@ -192,28 +208,41 @@ export function MLLab() {
         </div>
 
         {/* Headline metrics */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-          {(
-            [
-              ['Mean IC', nf(t.oos_ic_mean, 4), t.oos_ic_mean > 0],
-              ['IC std', nf(t.oos_ic_std, 4), false],
-              ['ICIR', nf(t.icir, 3), t.icir > 0.3],
-              ['Hit rate', pct(t.hit_rate, 1), t.hit_rate > 0.5],
-              ['OOS R²', nf(t.r2, 4), false],
-              ['OOS rows', nfInt(t.n_oos_rows), false],
-            ] as const
-          ).map(([label, value, good]) => (
-            <div key={label} className="rounded border border-ink-700 bg-ink-850 px-4 py-3">
-              <div className="truncate text-3xs font-medium uppercase tracking-[0.1em] text-fg-dim">
-                {label}
+        <div className="space-y-1.5">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+            {(
+              [
+                ['Mean IC', nf(t.oos_ic_mean, 4), t.oos_ic_mean > 0, undefined],
+                ['IC std', nf(t.oos_ic_std, 4), false, undefined],
+                ['ICIR', nf(t.icir, 3), t.icir > 0.3, 'unannualised'],
+                [
+                  'Hit rate',
+                  pct(t.hit_rate, 1),
+                  t.hit_rate > (t.hit_rate_base ?? 0.5),
+                  t.hit_rate_base != null ? `base ${pct(t.hit_rate_base, 1)}` : undefined,
+                ],
+                ['OOS R²', nf(t.r2, 4), false, undefined],
+                ['OOS rows', nfInt(t.n_oos_rows), false, undefined],
+              ] as const
+            ).map(([label, value, good, sub]) => (
+              <div key={label} className="rounded border border-ink-700 bg-ink-850 px-4 py-3">
+                <div className="truncate text-3xs font-medium uppercase tracking-[0.1em] text-fg-dim">
+                  {label}
+                </div>
+                <div className="mt-1.5">
+                  <Value size="lg" tone={good ? 'pos' : 'flat'}>
+                    {value}
+                  </Value>
+                  {sub && <div className="mt-0.5 text-3xs text-fg-mute">{sub}</div>}
+                </div>
               </div>
-              <div className="mt-1.5">
-                <Value size="lg" tone={good ? 'pos' : 'flat'}>
-                  {value}
-                </Value>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
+          <p className="text-3xs leading-relaxed text-fg-mute">
+            Cross-sectional Spearman IC per out-of-sample date; ICIR is the unannualised mean IC ÷
+            IC std. Hit-rate base = positive-class frequency of the same rows (vol targets: median
+            split ⇒ 0.50) — a sign rate at or below base is not skill.
+          </p>
         </div>
 
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
@@ -221,10 +250,10 @@ export function MLLab() {
             title="Signal diagnostics"
             subtitle={
               icView === 'series'
-                ? `Weekly out-of-sample Spearman IC · ${t.oos_start} → ${t.oos_end}`
+                ? `${dailyIc ? 'Daily' : 'Weekly'} out-of-sample Spearman IC · ${t.oos_start} → ${t.oos_end}`
                 : icView === 'decay'
-                  ? 'IC decay across forward horizons'
-                  : 'Monotonicity across prediction quantiles'
+                  ? 'IC decay across forward horizons (1/5/21d return labels)'
+                  : `Monotonicity across prediction ${t.quantiles.labels.length >= 10 ? 'deciles' : 'quantiles'}`
             }
             actions={
               <Segmented
@@ -246,14 +275,11 @@ export function MLLab() {
               <div className="mt-2 border-t border-ink-700 pt-2.5">
                 <div className="flex items-center gap-2">
                   <span className="text-3xs text-fg-mute">Monotonicity</span>
-                  <Badge tone={isMonotonic(t.quantiles.mean_forward_return) ? 'pos' : 'warn'}>
-                    {isMonotonic(t.quantiles.mean_forward_return) ? 'holds' : 'weak'}
+                  <Badge tone={qStepsUp === qSteps ? 'pos' : 'warn'}>
+                    {qStepsUp === qSteps ? 'holds' : `${qStepsUp}/${qSteps} steps up`}
                   </Badge>
                   <span className="ml-auto font-mono text-3xs text-fg-mute">
-                    Q5 − Q1 spread {ratioSigned(
-                      t.quantiles.mean_forward_return[4] - t.quantiles.mean_forward_return[0],
-                      2,
-                    )}
+                    {qLast} − {qFirst} spread {ratioSigned(qSpread, 2)}
                   </span>
                 </div>
               </div>
@@ -266,9 +292,9 @@ export function MLLab() {
           >
             <EChart option={fiOption} height={244} />
             <p className="mt-1.5 border-t border-ink-700 pt-2 text-2xs leading-relaxed text-fg-mute">
-              Momentum and realised volatility dominate. This is expected — and is exactly why the
-              adversarial checklist asks whether the model is doing anything other than learning
-              momentum.
+              Recent returns and realised volatility dominate gain importance on every target. That
+              is expected — and is exactly why the adversarial checklist asks whether the model is
+              doing anything other than restating momentum and volatility.
             </p>
           </Panel>
         </div>
@@ -353,6 +379,8 @@ export function MLLab() {
                   ['Target', t.target],
                   ['Objective', t.objective],
                   ['Horizon', `${t.horizon_days} trading days`],
+                  ['Model version', models.model_version ?? '—'],
+                  ['Engine', models.engine ?? '—'],
                   ['Feature version', models.feature_version],
                   ['Target version', models.target_version],
                   ['Universe version', models.universe_version],
@@ -373,10 +401,10 @@ export function MLLab() {
           <Panel title="Adversarial checks" subtitle="The questions that decide whether the signal is real">
             <ul className="space-y-1.5">
               {[
-                ['Learning momentum only?', 'Likely — momentum features dominate importance.'],
-                ['Learning semi beta only?', 'Partly — RS vs SOXX and SOXX beta rank highly.'],
-                ['Signal survives costs?', 'Tested in Backtest; see net-of-cost Sharpe.'],
-                ['Survives 2022?', 'Fold-level OOS IC shown above; regime view in Backtest.'],
+                ['Learning momentum only?', 'Partly — short-horizon returns and realised vol dominate gain importance; no ablation run yet.'],
+                ['Learning semi beta only?', 'No — features_v003 contains no SOXX inputs (QQQ beta only).'],
+                ['Signal survives costs?', 'Not tested — the net-of-cost test arrives with the Phase 10 backtest (OI-0003).'],
+                ['Survives 2022?', 'No return/direction edge in any year; volatility IC positive every year.'],
                 ['Driven by one name?', 'Not yet tested — concentration screen is OPEN.'],
                 ['Feature ablation run?', 'OPEN — recorded in the audit page.'],
               ].map(([q, a]) => (
@@ -391,7 +419,7 @@ export function MLLab() {
               onClick={() => navigate('backtest')}
               className="mt-2.5 w-full rounded-sm border border-ink-700 py-1 text-2xs text-fg-dim transition-colors hover:border-ink-650 hover:text-fg-base"
             >
-              Cost & regime tests →
+              Cost & regime tests (Phase 10) →
             </button>
           </Panel>
         </div>
@@ -406,9 +434,4 @@ function downsample(a: number[], n: number): number[] {
   if (a.length <= n) return a
   const step = a.length / n
   return Array.from({ length: n }, (_, i) => a[Math.floor(i * step)])
-}
-
-function isMonotonic(v: number[]): boolean {
-  for (let i = 1; i < v.length; i++) if (v[i] < v[i - 1] - 1e-9) return false
-  return true
 }

@@ -1428,9 +1428,9 @@ FILE_SURFACES: dict[str, list[str]] = {
 PENDING_REAL_ARTIFACTS = [
     "universe_verification_v001.json (DELIVERED)",
     "fundamentals_v001.parquet (Phase 1)",
-    "prices_v001.parquet",
-    "features_v003.parquet (Phase 5)",
-    "predictions_v007.parquet (Phase 6)",
+    "prices_v001.parquet (DELIVERED)",
+    "features_v003.parquet (Phase 5, DELIVERED)",
+    "predictions_v007.parquet (Phase 6, DELIVERED)",
     "covariance_v002.parquet (Phase 8)",
     "portfolio_weights_v004.parquet (Phase 9)",
     "backtest_v005.parquet (Phase 10)",
@@ -1532,12 +1532,15 @@ def build_manifest(real: dict) -> dict:
     }
     if existing:
         # Preserve real-run metadata: never downgrade a partially-real build.
+        # `training` is installed by wire_training_results.py (Phase 5/6 bundle
+        # installer) — the fixture generator must round-trip it verbatim.
         for k in (
             "synthetic",
             "disclaimer",
             "generated_at",
             "data_version",
             "acquisition",
+            "training",
             "pending_real_artifacts",
         ):
             if k in existing:
